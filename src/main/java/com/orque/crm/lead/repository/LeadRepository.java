@@ -1,6 +1,7 @@
 package com.orque.crm.lead.repository;
 
 import com.orque.crm.enums.LeadStatus;
+import com.orque.crm.enums.PipelineStage;
 import com.orque.crm.lead.entity.Lead;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -13,6 +14,6 @@ public interface LeadRepository extends JpaRepository<Lead, Long> {
     boolean existsByContactId(Long contactId);
 
     List<Lead> findByStatus(LeadStatus status);
-
     List<Lead> findByAssignedOwnerContainingIgnoreCase(String assignedOwner);
+    List<Lead> findByPipelineStage(PipelineStage pipelineStage);
 }

@@ -2,6 +2,7 @@ package com.orque.crm.lead.entity;
 
 import com.orque.crm.enums.LeadSource;
 import com.orque.crm.enums.LeadStatus;
+import com.orque.crm.enums.PipelineStage;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -59,7 +60,9 @@ public class Lead {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private LeadStatus status;
-
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private PipelineStage pipelineStage;
     @Column(columnDefinition = "TEXT")
     private String notes;
 

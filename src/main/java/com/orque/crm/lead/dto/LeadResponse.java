@@ -2,6 +2,7 @@ package com.orque.crm.lead.dto;
 
 import com.orque.crm.enums.LeadSource;
 import com.orque.crm.enums.LeadStatus;
+import com.orque.crm.enums.PipelineStage;
 import lombok.*;
 
 import java.math.BigDecimal;
@@ -34,6 +35,7 @@ public class LeadResponse {
     private LeadSource leadSource;
     private String assignedOwner;
     private LeadStatus status;
+    private PipelineStage pipelineStage;
     private String notes;
     private BigDecimal estimatedValue;
     private LocalDate expectedCloseDate;

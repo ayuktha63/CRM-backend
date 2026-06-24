@@ -56,6 +56,7 @@ public class LeadServiceImpl implements LeadService {
                                 ? request.getStatus()
                                 : LeadStatus.NEW
                 )
+                .pipelineStage(PipelineStage.NEW)
                 .notes(request.getNotes())
                 .estimatedValue(request.getEstimatedValue())
                 .expectedCloseDate(request.getExpectedCloseDate())
@@ -120,6 +121,7 @@ public class LeadServiceImpl implements LeadService {
                                 ? request.getStatus()
                                 : LeadStatus.NEW
                 )
+                .pipelineStage(PipelineStage.NEW)
                 .notes(request.getNotes())
                 .estimatedValue(request.getEstimatedValue())
                 .expectedCloseDate(request.getExpectedCloseDate())
@@ -227,6 +229,7 @@ public class LeadServiceImpl implements LeadService {
                 .leadSource(lead.getLeadSource())
                 .assignedOwner(lead.getAssignedOwner())
                 .status(lead.getStatus())
+                .pipelineStage(lead.getPipelineStage())
                 .notes(lead.getNotes())
                 .estimatedValue(lead.getEstimatedValue())
                 .expectedCloseDate(lead.getExpectedCloseDate())
