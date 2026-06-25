@@ -9,7 +9,9 @@ import com.orque.crm.pipeline.entity.PipelineStageHistory;
 import com.orque.crm.pipeline.repository.PipelineStageHistoryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-
+import com.orque.crm.audit.service.AuditLogService;
+import com.orque.crm.enums.AuditAction;
+import com.orque.crm.enums.AuditModule;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
@@ -22,7 +24,7 @@ public class PipelineServiceImpl implements PipelineService {
 
     private final LeadRepository leadRepository;
     private final PipelineStageHistoryRepository historyRepository;
-
+    private final AuditLogService auditLogService;
     @Override
     public PipelineBoardResponse getKanbanBoard() {
 
@@ -86,6 +88,20 @@ public class PipelineServiceImpl implements PipelineService {
                         .build();
 
         historyRepository.save(history);
+        auditLogService.createAudit(
+                AuditAction.LEAD_STATUS_CHANGED,
+                AuditModule.PIPELINE,
+                "Lead",
+                updatedLead.getId(),
+                previousStage.name(),
+                request.getNewStage().name(),
+                "Lead moved from "
+                        + previousStage
+                        + " to "
+                        + request.getNewStage(),
+                request.getMovedBy(),
+                null
+        );
 
         return mapToLeadResponse(updatedLead);
     }

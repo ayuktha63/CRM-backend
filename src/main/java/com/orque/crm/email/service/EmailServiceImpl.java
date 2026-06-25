@@ -9,7 +9,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.http.*;
 import org.springframework.web.client.RestTemplate;
-
+import com.orque.crm.audit.service.AuditLogService;
+import com.orque.crm.enums.AuditAction;
+import com.orque.crm.enums.AuditModule;
 import java.util.ArrayList;
 import java.util.Map;
 import java.time.LocalDateTime;
@@ -23,7 +25,7 @@ public class EmailServiceImpl implements EmailService {
     private final EmailTemplateRepository emailTemplateRepository;
     private final EmailMessageRepository emailMessageRepository;
     private final CommunicationHistoryRepository communicationHistoryRepository;
-
+    private final AuditLogService auditLogService;
     @Override
     public void connectMailbox(ConnectMailboxRequest request) {
 
@@ -94,6 +96,17 @@ public class EmailServiceImpl implements EmailService {
                 .build();
 
         communicationHistoryRepository.save(history);
+        auditLogService.createAudit(
+                AuditAction.EMAIL_SENT,
+                AuditModule.EMAIL,
+                "Email",
+                savedEmail.getId(),
+                null,
+                request.getToEmail(),
+                "Email sent to " + request.getToEmail(),
+                mailbox.getEmailAddress(),
+                null
+        );
     }
 
     @Override

@@ -11,7 +11,7 @@ import com.orque.crm.lead.repository.LeadActivityRepository;
 import com.orque.crm.lead.repository.LeadRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-
+import com.orque.crm.enums.AuditModule;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -74,10 +74,14 @@ public class LeadServiceImpl implements LeadService {
 
         auditLogService.createAudit(
                 AuditAction.LEAD_CREATED,
-                "LEAD",
+                AuditModule.LEAD,
+                "Lead",
                 savedLead.getId(),
+                null,
+                savedLead.getFullName(),
                 "Lead created manually: " + savedLead.getFullName(),
-                savedLead.getAssignedOwner()
+                savedLead.getAssignedOwner(),
+                null
         );
 
         return mapToLeadResponse(savedLead);
@@ -143,10 +147,14 @@ public class LeadServiceImpl implements LeadService {
 
         auditLogService.createAudit(
                 AuditAction.CONTACT_CONVERTED_TO_LEAD,
-                "LEAD",
+                AuditModule.LEAD,
+                "Lead",
                 savedLead.getId(),
+                null,
                 "Contact ID " + contactId + " converted into Lead ID " + savedLead.getId(),
-                savedLead.getAssignedOwner()
+                "Contact ID " + contactId + " converted into Lead ID " + savedLead.getId(),
+                savedLead.getAssignedOwner(),
+                null
         );
 
         return mapToLeadResponse(savedLead);

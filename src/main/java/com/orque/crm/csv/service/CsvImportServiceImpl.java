@@ -19,13 +19,16 @@ import java.io.InputStreamReader;
 import java.io.Reader;
 import java.time.LocalDateTime;
 import java.util.*;
-
+import com.orque.crm.audit.service.AuditLogService;
+import com.orque.crm.enums.AuditAction;
+import com.orque.crm.enums.AuditModule;
 @Service
 @RequiredArgsConstructor
 public class CsvImportServiceImpl implements CsvImportService {
 
     private final ContactRepository contactRepository;
     private final CsvImportHistoryRepository csvImportHistoryRepository;
+    private final AuditLogService auditLogService;
 
     @Override
     public CsvPreviewResponse previewCsv(MultipartFile file) {
@@ -220,6 +223,20 @@ public class CsvImportServiceImpl implements CsvImportService {
                     .build();
 
             CsvImportHistory savedHistory = csvImportHistoryRepository.save(history);
+            auditLogService.createAudit(
+                    AuditAction.CSV_IMPORTED,
+                    AuditModule.CSV_IMPORT,
+                    "CSV Import",
+                    savedHistory.getId(),
+                    null,
+                    file.getOriginalFilename(),
+                    "Imported "
+                            + successfulImports
+                            + " contacts from "
+                            + file.getOriginalFilename(),
+                    "SYSTEM",
+                    null
+            );
 
             return CsvImportResponse.builder()
                     .importId(savedHistory.getId())

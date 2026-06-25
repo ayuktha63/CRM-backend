@@ -1,18 +1,22 @@
 package com.orque.crm.auth.service;
+
+import com.orque.crm.audit.service.AuditLogService;
 import com.orque.crm.auth.dto.*;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import com.orque.crm.auth.entity.Role;
 import com.orque.crm.auth.entity.User;
 import com.orque.crm.auth.repository.RoleRepository;
 import com.orque.crm.auth.repository.UserRepository;
 import com.orque.crm.common.ApiResponse;
+import com.orque.crm.enums.AuditAction;
+import com.orque.crm.enums.AuditModule;
 import com.orque.crm.enums.RoleType;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
 import com.orque.crm.security.JwtService;
-import java.time.LocalDateTime;
-import com.orque.crm.auth.dto.ApiMessageResponse;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
 
 @Service
 @RequiredArgsConstructor
@@ -22,6 +26,8 @@ public class AuthServiceImpl implements AuthService {
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final AuditLogService auditLogService;
+
     @Override
     public ApiResponse register(RegisterRequest request) {
 
@@ -52,21 +58,17 @@ public class AuthServiceImpl implements AuthService {
 
         return new ApiResponse(true, "User registered successfully");
     }
+
     @Override
-    public AuthResponse login(
-            LoginRequest request
-    ) {
+    public AuthResponse login(LoginRequest request) {
 
         User user = userRepository
                 .findByUsernameOrEmail(
                         request.getUsernameOrEmail(),
                         request.getUsernameOrEmail()
                 )
-                .orElseThrow(
-                        () -> new RuntimeException(
-                                "Invalid username or email"
-                        )
-                );
+                .orElseThrow(() ->
+                        new RuntimeException("Invalid username or email"));
 
         boolean passwordMatches =
                 passwordEncoder.matches(
@@ -75,9 +77,7 @@ public class AuthServiceImpl implements AuthService {
                 );
 
         if (!passwordMatches) {
-            throw new RuntimeException(
-                    "Invalid password"
-            );
+            throw new RuntimeException("Invalid password");
         }
 
         String accessToken =
@@ -85,6 +85,18 @@ public class AuthServiceImpl implements AuthService {
 
         String refreshToken =
                 jwtService.generateRefreshToken(user);
+
+        auditLogService.createAudit(
+                AuditAction.USER_LOGIN,
+                AuditModule.AUTH,
+                "User",
+                user.getId(),
+                null,
+                "LOGIN",
+                "User logged in successfully",
+                user.getUsername(),
+                null
+        );
 
         return AuthResponse.builder()
                 .accessToken(accessToken)
@@ -95,8 +107,8 @@ public class AuthServiceImpl implements AuthService {
                 .email(user.getEmail())
                 .role(user.getRole().getName().name())
                 .build();
-
     }
+
     @Override
     public UserProfileResponse getCurrentUser() {
 
@@ -115,6 +127,7 @@ public class AuthServiceImpl implements AuthService {
                 .enabled(user.getEnabled())
                 .build();
     }
+
     @Override
     public AuthResponse refreshToken(RefreshTokenRequest request) {
 
@@ -141,8 +154,30 @@ public class AuthServiceImpl implements AuthService {
                 .role(user.getRole().getName().name())
                 .build();
     }
+
     @Override
     public ApiMessageResponse logout() {
+
+        Object principal = SecurityContextHolder
+                .getContext()
+                .getAuthentication()
+                .getPrincipal();
+
+        if (principal instanceof User user) {
+
+            auditLogService.createAudit(
+                    AuditAction.USER_LOGOUT,
+                    AuditModule.AUTH,
+                    "User",
+                    user.getId(),
+                    "LOGGED_IN",
+                    "LOGGED_OUT",
+                    "User logged out successfully",
+                    user.getUsername(),
+                    null
+            );
+        }
+
         return new ApiMessageResponse("Logged out successfully");
     }
 }

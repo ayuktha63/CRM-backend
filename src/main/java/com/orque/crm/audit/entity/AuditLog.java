@@ -1,6 +1,7 @@
 package com.orque.crm.audit.entity;
 
 import com.orque.crm.enums.AuditAction;
+import com.orque.crm.enums.AuditModule;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -23,16 +24,27 @@ public class AuditLog {
     @Column(nullable = false)
     private AuditAction action;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private AuditModule module;
+
     @Column(nullable = false)
     private String entityType;
 
-    @Column(nullable = false)
     private Long entityId;
+
+    @Column(columnDefinition = "TEXT")
+    private String previousValue;
+
+    @Column(columnDefinition = "TEXT")
+    private String newValue;
 
     @Column(columnDefinition = "TEXT")
     private String description;
 
     private String performedBy;
+
+    private String ipAddress;
 
     private LocalDateTime createdAt;
 }

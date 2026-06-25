@@ -8,7 +8,9 @@ import com.orque.crm.task.repository.CrmTaskRepository;
 import com.orque.crm.task.repository.TaskNotificationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-
+import com.orque.crm.audit.service.AuditLogService;
+import com.orque.crm.enums.AuditAction;
+import com.orque.crm.enums.AuditModule;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -18,7 +20,7 @@ public class CrmTaskServiceImpl implements CrmTaskService {
 
     private final CrmTaskRepository taskRepository;
     private final TaskNotificationRepository notificationRepository;
-
+    private final AuditLogService auditLogService;
     @Override
     public CrmTaskResponse createTask(CreateCrmTaskRequest request) {
 
@@ -38,6 +40,17 @@ public class CrmTaskServiceImpl implements CrmTaskService {
                 .build();
 
         CrmTask savedTask = taskRepository.save(task);
+        auditLogService.createAudit(
+                AuditAction.TASK_CREATED,
+                AuditModule.TASK,
+                "Task",
+                savedTask.getId(),
+                null,
+                savedTask.getTitle(),
+                "Task created: " + savedTask.getTitle(),
+                savedTask.getAssignedTo(),
+                null
+        );
 
         TaskNotification notification =
                 TaskNotification.builder()
@@ -92,9 +105,22 @@ public class CrmTaskServiceImpl implements CrmTaskService {
         task.setCompletedAt(LocalDateTime.now());
         task.setUpdatedAt(LocalDateTime.now());
 
-        return mapToResponse(
-                taskRepository.save(task)
+        CrmTask updatedTask = taskRepository.save(task);
+
+        auditLogService.createAudit(
+                AuditAction.TASK_COMPLETED,
+                AuditModule.TASK,
+                "Task",
+                updatedTask.getId(),
+                TaskStatus.PENDING.name(),
+                TaskStatus.COMPLETED.name(),
+                "Task completed: " + updatedTask.getTitle(),
+                updatedTask.getAssignedTo(),
+                null
         );
+
+        return mapToResponse(updatedTask);
+
     }
 
     @Override

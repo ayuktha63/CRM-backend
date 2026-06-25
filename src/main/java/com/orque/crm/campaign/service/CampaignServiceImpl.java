@@ -7,7 +7,9 @@ import com.orque.crm.enums.CampaignRecipientStatus;
 import com.orque.crm.enums.CampaignStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-
+import com.orque.crm.audit.service.AuditLogService;
+import com.orque.crm.enums.AuditAction;
+import com.orque.crm.enums.AuditModule;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -20,6 +22,7 @@ public class CampaignServiceImpl implements CampaignService {
     private final CampaignEmailHistoryRepository campaignEmailHistoryRepository;
     private final CampaignMetricsRepository campaignMetricsRepository;
     private final CampaignAsyncService campaignAsyncService;
+    private final AuditLogService auditLogService;
 
     @Override
     public CampaignResponse createCampaign(CreateCampaignRequest request) {
@@ -46,6 +49,17 @@ public class CampaignServiceImpl implements CampaignService {
                 .build();
 
         campaignMetricsRepository.save(metrics);
+        auditLogService.createAudit(
+                AuditAction.CAMPAIGN_CREATED,
+                AuditModule.CAMPAIGN,
+                "Campaign",
+                saved.getId(),
+                null,
+                saved.getCampaignName(),
+                "Campaign created: " + saved.getCampaignName(),
+                "SYSTEM",
+                null
+        );
 
         return mapCampaignToResponse(saved);
     }
@@ -129,6 +143,17 @@ public class CampaignServiceImpl implements CampaignService {
         campaign.setLaunchedAt(LocalDateTime.now());
 
         campaignRepository.save(campaign);
+        auditLogService.createAudit(
+                AuditAction.CAMPAIGN_LAUNCHED,
+                AuditModule.CAMPAIGN,
+                "Campaign",
+                campaign.getId(),
+                CampaignStatus.DRAFT.name(),
+                CampaignStatus.RUNNING.name(),
+                "Campaign launched: " + campaign.getCampaignName(),
+                "SYSTEM",
+                null
+        );
 
         campaignAsyncService.processCampaign(campaign);
     }
