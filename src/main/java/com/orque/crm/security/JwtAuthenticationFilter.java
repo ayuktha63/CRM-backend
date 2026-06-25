@@ -46,8 +46,9 @@ public class JwtAuthenticationFilter
             return;
         }
 
-        String jwt =
-                authHeader.substring(7);
+        String jwt = authHeader.substring(7).trim();
+
+        System.out.println("JWT = [" + jwt + "]");
 
         String username =
                 jwtService.extractUsername(jwt);
@@ -74,8 +75,8 @@ public class JwtAuthenticationFilter
                         new UsernamePasswordAuthenticationToken(
                                 user,
                                 null,
-                                java.util.Collections.emptyList()                        );
-
+                                null
+                        );
                 authToken.setDetails(
                         new WebAuthenticationDetailsSource()
                                 .buildDetails(request)
