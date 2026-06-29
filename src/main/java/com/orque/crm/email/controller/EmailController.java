@@ -97,4 +97,38 @@ public class EmailController {
     public ResponseEntity<List<EmailMessageResponse>> getMyLogs() {
         return ResponseEntity.ok(emailService.getLogsForCurrentUser());
     }
+
+    @GetMapping("/folder/{folderName}")
+    public ResponseEntity<List<EmailMessageResponse>> getEmailsByFolder(@PathVariable String folderName) {
+        return ResponseEntity.ok(emailService.getEmailsByFolder(folderName));
+    }
+
+    @PutMapping("/{id}/folder")
+    public ResponseEntity<Void> updateEmailFolder(@PathVariable Long id, @RequestParam String folder) {
+        emailService.updateEmailFolder(id, folder);
+        return ResponseEntity.ok().build();
+    }
+
+    @PutMapping("/{id}/star")
+    public ResponseEntity<Void> toggleEmailStar(@PathVariable Long id) {
+        emailService.toggleEmailStar(id);
+        return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/tracker/open/{id}")
+    public ResponseEntity<byte[]> trackOpen(@PathVariable Long id) {
+        emailService.recordEmailOpen(id);
+        byte[] gif = java.util.Base64.getDecoder().decode("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7");
+        return ResponseEntity.ok()
+                .contentType(org.springframework.http.MediaType.IMAGE_GIF)
+                .body(gif);
+    }
+
+    @GetMapping("/tracker/click/{id}")
+    public ResponseEntity<Void> trackClick(@PathVariable Long id, @RequestParam String redirectUrl) {
+        emailService.recordEmailClick(id);
+        return ResponseEntity.status(org.springframework.http.HttpStatus.FOUND)
+                .header(org.springframework.http.HttpHeaders.LOCATION, redirectUrl)
+                .build();
+    }
 }

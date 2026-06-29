@@ -36,4 +36,11 @@ public class EmailMessageResponse {
     private LocalDateTime sentAt;
 
     private LocalDateTime receivedAt;
+
+    private String folder;
+    private Boolean isStarred;
+    private Boolean isPinned;
+    private Integer openCount;
+    private Integer clickCount;
+    private String bounceReason;
 }

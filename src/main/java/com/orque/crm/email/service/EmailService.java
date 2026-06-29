@@ -25,4 +25,14 @@ public interface EmailService {
     List<GmailInboxMessageResponse> getInboxMessages(Long mailboxId);
 
     List<EmailMessageResponse> getLogsForCurrentUser();
+
+    List<EmailMessageResponse> getEmailsByFolder(String folderName);
+
+    void updateEmailFolder(Long id, String folderName);
+
+    void toggleEmailStar(Long id);
+
+    void recordEmailOpen(Long id);
+
+    void recordEmailClick(Long id);
 }

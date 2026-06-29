@@ -51,6 +51,7 @@ public class UserSettingsService {
                 .quoteNextNumber(1001)
                 .invoiceSeriesPrefix("INV-")
                 .invoiceNextNumber(1001)
+                .defaultPrinter("")
                 .build();
     }
 
@@ -82,6 +83,8 @@ public class UserSettingsService {
         if (d.getQuoteNextNumber()        != null) s.setQuoteNextNumber(d.getQuoteNextNumber());
         if (d.getInvoiceSeriesPrefix()    != null) s.setInvoiceSeriesPrefix(d.getInvoiceSeriesPrefix());
         if (d.getInvoiceNextNumber()      != null) s.setInvoiceNextNumber(d.getInvoiceNextNumber());
+
+        if (d.getDefaultPrinter()         != null) s.setDefaultPrinter(d.getDefaultPrinter());
     }
 
     private UserSettingsDto toDto(UserSettings s) {
@@ -111,6 +114,7 @@ public class UserSettingsService {
                 .quoteNextNumber(s.getQuoteNextNumber())
                 .invoiceSeriesPrefix(s.getInvoiceSeriesPrefix())
                 .invoiceNextNumber(s.getInvoiceNextNumber())
+                .defaultPrinter(s.getDefaultPrinter())
                 .build();
     }
 

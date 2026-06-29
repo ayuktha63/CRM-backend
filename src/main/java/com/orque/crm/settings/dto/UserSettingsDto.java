@@ -40,4 +40,7 @@ public class UserSettingsDto {
     private Integer quoteNextNumber;
     private String  invoiceSeriesPrefix;
     private Integer invoiceNextNumber;
+
+    // Printer
+    private String  defaultPrinter;
 }

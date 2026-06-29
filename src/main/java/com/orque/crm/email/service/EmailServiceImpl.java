@@ -7,6 +7,7 @@ import com.orque.crm.email.repository.*;
 import com.orque.crm.enums.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.http.*;
 import org.springframework.web.client.RestTemplate;
 import com.orque.crm.audit.service.AuditLogService;
@@ -167,6 +168,12 @@ public class EmailServiceImpl implements EmailService {
                 .status(emailMessage.getStatus())
                 .sentAt(emailMessage.getSentAt())
                 .receivedAt(emailMessage.getReceivedAt())
+                .folder(emailMessage.getFolder() != null ? emailMessage.getFolder() : "INBOX")
+                .isStarred(emailMessage.getIsStarred() != null && emailMessage.getIsStarred())
+                .isPinned(emailMessage.getIsPinned() != null && emailMessage.getIsPinned())
+                .openCount(emailMessage.getOpenCount() != null ? emailMessage.getOpenCount() : 0)
+                .clickCount(emailMessage.getClickCount() != null ? emailMessage.getClickCount() : 0)
+                .bounceReason(emailMessage.getBounceReason())
                 .build();
     }
 
@@ -291,5 +298,49 @@ public class EmailServiceImpl implements EmailService {
                 .stream()
                 .map(this::mapEmailToResponse)
                 .toList();
+    }
+
+    @Override
+    public List<EmailMessageResponse> getEmailsByFolder(String folderName) {
+        return emailMessageRepository.findByFolderOrderBySentAtDesc(folderName.toUpperCase())
+                .stream()
+                .map(this::mapEmailToResponse)
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public void updateEmailFolder(Long id, String folderName) {
+        EmailMessage email = emailMessageRepository.findById(id)
+                .orElseThrow(() -> new java.util.NoSuchElementException("Email not found"));
+        email.setFolder(folderName.toUpperCase());
+        emailMessageRepository.save(email);
+    }
+
+    @Override
+    @Transactional
+    public void toggleEmailStar(Long id) {
+        EmailMessage email = emailMessageRepository.findById(id)
+                .orElseThrow(() -> new java.util.NoSuchElementException("Email not found"));
+        email.setIsStarred(email.getIsStarred() == null ? true : !email.getIsStarred());
+        emailMessageRepository.save(email);
+    }
+
+    @Override
+    @Transactional
+    public void recordEmailOpen(Long id) {
+        EmailMessage email = emailMessageRepository.findById(id)
+                .orElseThrow(() -> new java.util.NoSuchElementException("Email not found"));
+        email.setOpenCount(email.getOpenCount() == null ? 1 : email.getOpenCount() + 1);
+        emailMessageRepository.save(email);
+    }
+
+    @Override
+    @Transactional
+    public void recordEmailClick(Long id) {
+        EmailMessage email = emailMessageRepository.findById(id)
+                .orElseThrow(() -> new java.util.NoSuchElementException("Email not found"));
+        email.setClickCount(email.getClickCount() == null ? 1 : email.getClickCount() + 1);
+        emailMessageRepository.save(email);
     }
 }

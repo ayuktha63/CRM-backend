@@ -56,6 +56,9 @@ public class UserSettings {
     private String  invoiceSeriesPrefix;
     private Integer invoiceNextNumber;
 
+    // ── Printer ──────────────────────────────────────────────────────────────
+    private String  defaultPrinter;
+
     private LocalDateTime updatedAt;
 
     @PrePersist @PreUpdate

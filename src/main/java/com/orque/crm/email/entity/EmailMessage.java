@@ -50,4 +50,12 @@ public class EmailMessage {
     private LocalDateTime receivedAt;
 
     private LocalDateTime createdAt;
+
+    // Email Workspace properties
+    private String folder; // INBOX, SENT, DRAFT, TRASH, SPAM, ARCHIVE
+    private Boolean isStarred;
+    private Boolean isPinned;
+    private Integer openCount;
+    private Integer clickCount;
+    private String bounceReason;
 }

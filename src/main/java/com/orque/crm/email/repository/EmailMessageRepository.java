@@ -15,4 +15,8 @@ public interface EmailMessageRepository
     List<EmailMessage> findByGmailThreadId(String threadId);
 
     List<EmailMessage> findByFromEmailOrderBySentAtDesc(String fromEmail);
+
+    List<EmailMessage> findByFolderOrderBySentAtDesc(String folder);
+
+    List<EmailMessage> findByFromEmailAndFolderOrderBySentAtDesc(String fromEmail, String folder);
 }
