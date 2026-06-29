@@ -2,6 +2,7 @@ package com.orque.crm.security;
 
 import com.orque.crm.auth.entity.User;
 import com.orque.crm.auth.repository.UserRepository;
+import com.orque.crm.session.repository.UserSessionRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
 
 @Component
 @RequiredArgsConstructor
@@ -22,6 +24,7 @@ public class JwtAuthenticationFilter
 
     private final JwtService jwtService;
     private final UserRepository userRepository;
+    private final UserSessionRepository sessionRepository;
 
     @Override
     protected void doFilterInternal(
@@ -48,10 +51,12 @@ public class JwtAuthenticationFilter
 
         String jwt = authHeader.substring(7).trim();
 
-        System.out.println("JWT = [" + jwt + "]");
-
-        String username =
-                jwtService.extractUsername(jwt);
+        String username = null;
+        try {
+            username = jwtService.extractUsername(jwt);
+        } catch (Exception e) {
+            System.err.println("JWT extraction failed: " + e.getMessage());
+        }
 
         if (username != null &&
                 SecurityContextHolder
@@ -64,7 +69,14 @@ public class JwtAuthenticationFilter
                             .findByUsername(username)
                             .orElse(null);
 
+            // Allow if no session row exists (pre-sessions-feature tokens) or row is ACTIVE.
+            // Only block when a row explicitly shows TERMINATED or EXPIRED.
+            boolean isSessionBlocked = sessionRepository.findByJwtId(jwt)
+                    .map(session -> "TERMINATED".equals(session.getStatus()) || "EXPIRED".equals(session.getStatus()))
+                    .orElse(false);
+
             if (user != null &&
+                    !isSessionBlocked &&
                     jwtService
                             .isTokenValid(
                                     jwt,
@@ -87,6 +99,12 @@ public class JwtAuthenticationFilter
                         .setAuthentication(
                                 authToken
                         );
+
+                // Update lastActivity for active session
+                sessionRepository.findByJwtId(jwt).ifPresent(session -> {
+                    session.setLastActivity(LocalDateTime.now());
+                    sessionRepository.save(session);
+                });
             }
         }
 

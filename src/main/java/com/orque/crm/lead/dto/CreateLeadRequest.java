@@ -1,5 +1,6 @@
 package com.orque.crm.lead.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.orque.crm.enums.LeadSource;
 import com.orque.crm.enums.LeadStatus;
 import jakarta.validation.constraints.Email;
@@ -14,6 +15,7 @@ import java.time.LocalDate;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class CreateLeadRequest {
 
     @NotBlank(message = "Full name is required")

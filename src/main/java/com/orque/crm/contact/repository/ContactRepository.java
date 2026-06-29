@@ -10,6 +10,12 @@ public interface ContactRepository extends JpaRepository<Contact, Long> {
 
     boolean existsByEmail(String email);
 
+    java.util.Optional<Contact> findByEmail(String email);
+
+    java.util.Optional<Contact> findByEmailIgnoreCase(String email);
+
+    java.util.List<Contact> findByCompanyIgnoreCase(String company);
+
     List<Contact> findByStatus(ContactStatus status);
 
     List<Contact> findByFullNameContainingIgnoreCaseOrEmailContainingIgnoreCaseOrCompanyContainingIgnoreCase(

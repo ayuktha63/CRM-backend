@@ -1,5 +1,6 @@
 package com.orque.crm.csv.service;
 
+import com.orque.crm.common.UserContextHelper;
 import com.orque.crm.contact.entity.Contact;
 import com.orque.crm.contact.repository.ContactRepository;
 import com.orque.crm.csv.dto.CsvImportError;
@@ -206,6 +207,7 @@ public class CsvImportServiceImpl implements CsvImportService {
                         .tags(tags)
                         .notes(notes)
                         .status(ContactStatus.NEW)
+                        .owner(UserContextHelper.currentUsername())
                         .createdAt(LocalDateTime.now())
                         .updatedAt(LocalDateTime.now())
                         .build();

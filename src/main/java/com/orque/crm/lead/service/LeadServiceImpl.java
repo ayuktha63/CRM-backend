@@ -4,6 +4,10 @@ import com.orque.crm.audit.service.AuditLogService;
 import com.orque.crm.contact.entity.Contact;
 import com.orque.crm.contact.repository.ContactRepository;
 import com.orque.crm.enums.*;
+import com.orque.crm.feature.entity.Account;
+import com.orque.crm.feature.entity.Deal;
+import com.orque.crm.feature.repository.AccountRepository;
+import com.orque.crm.feature.repository.DealRepository;
 import com.orque.crm.lead.dto.*;
 import com.orque.crm.lead.entity.Lead;
 import com.orque.crm.lead.entity.LeadActivity;
@@ -11,6 +15,7 @@ import com.orque.crm.lead.repository.LeadActivityRepository;
 import com.orque.crm.lead.repository.LeadRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import com.orque.crm.enums.AuditModule;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -22,6 +27,8 @@ public class LeadServiceImpl implements LeadService {
     private final LeadRepository leadRepository;
     private final LeadActivityRepository leadActivityRepository;
     private final ContactRepository contactRepository;
+    private final AccountRepository accountRepository;
+    private final DealRepository dealRepository;
     private final AuditLogService auditLogService;
 
     @Override
@@ -201,6 +208,160 @@ public class LeadServiceImpl implements LeadService {
                 .stream()
                 .map(this::mapToActivityResponse)
                 .toList();
+    }
+
+    @Override
+    @Transactional
+    public LeadResponse qualifyLead(Long id) {
+        Lead lead = leadRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Lead not found: " + id));
+
+        if (lead.getStatus() == LeadStatus.CONVERTED) {
+            throw new RuntimeException("Lead has already been converted.");
+        }
+        if (lead.getStatus() != LeadStatus.QUALIFIED) {
+            throw new RuntimeException("Only QUALIFIED leads can be converted. Please qualify the lead first.");
+        }
+
+        // 1. Create or reuse Contact (case-insensitive email match)
+        Contact contact = contactRepository.findByEmailIgnoreCase(lead.getEmail())
+                .orElseGet(() -> contactRepository.save(
+                        Contact.builder()
+                                .fullName(lead.getFullName())
+                                .email(lead.getEmail())
+                                .phone(lead.getPhone())
+                                .company(lead.getCompany())
+                                .jobTitle(lead.getJobTitle())
+                                .industry(lead.getIndustry())
+                                .website(lead.getWebsite())
+                                .address(lead.getAddress())
+                                .country(lead.getCountry())
+                                .state(lead.getState())
+                                .city(lead.getCity())
+                                .tags(lead.getTags())
+                                .status(ContactStatus.NEW)
+                                .owner(lead.getAssignedOwner())
+                                .createdAt(LocalDateTime.now())
+                                .updatedAt(LocalDateTime.now())
+                                .build()
+                ));
+
+        // 2. Create or reuse Account (match by company name)
+        final Account account = (lead.getCompany() != null && !lead.getCompany().isBlank())
+                ? accountRepository.findByCompanyNameIgnoreCase(lead.getCompany())
+                        .orElseGet(() -> accountRepository.save(
+                                Account.builder()
+                                        .companyName(lead.getCompany())
+                                        .industry(lead.getIndustry())
+                                        .phone(lead.getPhone())
+                                        .website(lead.getWebsite())
+                                        .country(lead.getCountry())
+                                        .status("Active")
+                                        .owner(lead.getAssignedOwner())
+                                        .build()
+                        ))
+                : null;
+
+        // 3. Create Deal from lead data
+        Deal deal = dealRepository.save(
+                Deal.builder()
+                        .dealName(lead.getFullName() + " — Deal")
+                        .account(account != null ? account.getCompanyName() : "")
+                        .contact(lead.getFullName())
+                        .amount(lead.getEstimatedValue())
+                        .stage("Prospecting")
+                        .expectedCloseDate(lead.getExpectedCloseDate())
+                        .assignedTo(lead.getAssignedOwner())
+                        .build()
+        );
+
+        // 4. Mark Lead as CONVERTED
+        lead.setStatus(LeadStatus.CONVERTED);
+        lead.setContactId(contact.getId());
+        lead.setUpdatedAt(LocalDateTime.now());
+        Lead saved = leadRepository.save(lead);
+
+        createLeadActivity(saved.getId(), LeadActivityType.LEAD_CONVERTED,
+                "Lead converted: Contact #" + contact.getId()
+                + (account != null ? ", Account #" + account.getId() : "")
+                + ", Deal #" + deal.getId());
+
+        auditLogService.createAudit(
+                AuditAction.LEAD_CONVERTED,
+                AuditModule.LEAD,
+                "Lead",
+                saved.getId(),
+                LeadStatus.QUALIFIED.name(),
+                LeadStatus.CONVERTED.name(),
+                "Lead converted — Contact, Account and Deal created/linked",
+                saved.getAssignedOwner(),
+                null
+        );
+
+        return mapToLeadResponse(saved);
+    }
+
+    @Override
+    public LeadResponse updateLead(Long id, CreateLeadRequest request) {
+        Lead lead = leadRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Lead not found: " + id));
+
+        if (!lead.getEmail().equalsIgnoreCase(request.getEmail())
+                && leadRepository.existsByEmail(request.getEmail())) {
+            throw new RuntimeException("Another lead with this email already exists");
+        }
+
+        lead.setFullName(request.getFullName());
+        lead.setCompany(request.getCompany());
+        lead.setEmail(request.getEmail());
+        lead.setPhone(request.getPhone());
+        lead.setJobTitle(request.getJobTitle());
+        lead.setIndustry(request.getIndustry());
+        lead.setWebsite(request.getWebsite());
+        lead.setAddress(request.getAddress());
+        lead.setCountry(request.getCountry());
+        lead.setState(request.getState());
+        lead.setCity(request.getCity());
+        lead.setTags(request.getTags());
+        if (request.getLeadSource() != null) lead.setLeadSource(request.getLeadSource());
+        lead.setAssignedOwner(request.getAssignedOwner());
+        if (request.getStatus() != null) lead.setStatus(request.getStatus());
+        lead.setNotes(request.getNotes());
+        lead.setEstimatedValue(request.getEstimatedValue());
+        lead.setExpectedCloseDate(request.getExpectedCloseDate());
+        lead.setUpdatedAt(LocalDateTime.now());
+
+        Lead saved = leadRepository.save(lead);
+        auditLogService.createAudit(AuditAction.LEAD_STATUS_CHANGED, AuditModule.LEAD, "Lead",
+                saved.getId(), null, saved.getFullName(), "Lead updated", saved.getAssignedOwner(), null);
+        return mapToLeadResponse(saved);
+    }
+
+    @Override
+    public LeadResponse promoteToQualified(Long id) {
+        Lead lead = leadRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Lead not found: " + id));
+
+        lead.setStatus(LeadStatus.QUALIFIED);
+        lead.setUpdatedAt(LocalDateTime.now());
+        Lead saved = leadRepository.save(lead);
+
+        createLeadActivity(saved.getId(), LeadActivityType.STATUS_CHANGED, "Lead promoted to QUALIFIED");
+        auditLogService.createAudit(AuditAction.LEAD_STATUS_CHANGED, AuditModule.LEAD, "Lead",
+                saved.getId(), LeadStatus.NEW.name(), LeadStatus.QUALIFIED.name(),
+                "Lead status changed to QUALIFIED", saved.getAssignedOwner(), null);
+        return mapToLeadResponse(saved);
+    }
+
+    @Override
+    public java.util.List<LeadResponse> bulkImportLeads(java.util.List<CreateLeadRequest> requests) {
+        java.util.List<LeadResponse> imported = new java.util.ArrayList<>();
+        for (CreateLeadRequest req : requests) {
+            if (req.getEmail() == null || req.getEmail().isBlank()) continue;
+            if (leadRepository.existsByEmail(req.getEmail())) continue;
+            try { imported.add(createLead(req)); } catch (RuntimeException ignored) { /* skip */ }
+        }
+        return imported;
     }
 
     private void createLeadActivity(

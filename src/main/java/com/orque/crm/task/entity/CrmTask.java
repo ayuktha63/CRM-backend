@@ -45,6 +45,12 @@ public class CrmTask {
 
     private String assignedTo;
 
+    private String relatedType;
+
+    private String relatedName;
+
+    private Long relatedId;
+
     private LocalDateTime dueDate;
 
     @Column(columnDefinition = "TEXT")

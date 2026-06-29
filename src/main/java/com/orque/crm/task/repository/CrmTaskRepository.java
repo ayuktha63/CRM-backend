@@ -11,6 +11,8 @@ import java.util.List;
 
 public interface CrmTaskRepository extends JpaRepository<CrmTask, Long> {
 
+    List<CrmTask> findByRelatedTypeIgnoreCaseAndRelatedId(String relatedType, Long relatedId);
+
     List<CrmTask> findByStatus(TaskStatus status);
 
     List<CrmTask> findByPriority(TaskPriority priority);

@@ -1,11 +1,14 @@
 package com.orque.crm.contact.dto;
 
+import com.orque.crm.enums.ContactStatus;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
 @Data
 public class CreateContactRequest {
+
+    private ContactStatus status;
 
     @NotBlank
     private String fullName;

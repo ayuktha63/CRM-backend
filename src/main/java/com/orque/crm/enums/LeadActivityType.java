@@ -4,6 +4,7 @@ public enum LeadActivityType {
 
     LEAD_CREATED,
     CONTACT_CONVERTED,
+    LEAD_CONVERTED,
     STATUS_CHANGED,
     NOTES_UPDATED,
     OWNER_ASSIGNED

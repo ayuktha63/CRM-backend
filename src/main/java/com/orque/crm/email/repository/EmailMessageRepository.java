@@ -13,4 +13,6 @@ public interface EmailMessageRepository
     List<EmailMessage> findByContactId(Long contactId);
 
     List<EmailMessage> findByGmailThreadId(String threadId);
+
+    List<EmailMessage> findByFromEmailOrderBySentAtDesc(String fromEmail);
 }

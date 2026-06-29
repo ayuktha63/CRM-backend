@@ -4,5 +4,6 @@ public enum LeadStatus {
 
     NEW,
     QUALIFIED,
+    CONVERTED,
     DISQUALIFIED
 }

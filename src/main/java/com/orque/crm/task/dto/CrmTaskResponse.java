@@ -32,6 +32,10 @@ public class CrmTaskResponse {
 
     private String assignedTo;
 
+    private String relatedType;
+
+    private String relatedName;
+
     private LocalDateTime dueDate;
 
     private String notes;

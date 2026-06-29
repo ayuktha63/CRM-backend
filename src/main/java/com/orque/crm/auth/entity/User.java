@@ -35,6 +35,13 @@ public class User {
 
     private Boolean enabled;
 
+    private String phone;
+
+    @Column(length = 20)
+    private String status;   // ACTIVE | INACTIVE
+
+    private LocalDateTime lastLoginAt;
+
     @ManyToOne
     @JoinColumn(name = "role_id", nullable = false)
     private Role role;
@@ -42,4 +49,17 @@ public class User {
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
+
+    @PrePersist
+    protected void onCreate() {
+        if (createdAt == null) createdAt = LocalDateTime.now();
+        if (updatedAt == null) updatedAt = LocalDateTime.now();
+        if (status == null) status = "ACTIVE";
+        if (enabled == null) enabled = true;
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
 }

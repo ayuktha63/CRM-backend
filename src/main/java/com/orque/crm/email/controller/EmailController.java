@@ -92,4 +92,9 @@ public class EmailController {
                 emailService.getInboxMessages(mailboxId)
         );
     }
+
+    @GetMapping("/logs")
+    public ResponseEntity<List<EmailMessageResponse>> getMyLogs() {
+        return ResponseEntity.ok(emailService.getLogsForCurrentUser());
+    }
 }

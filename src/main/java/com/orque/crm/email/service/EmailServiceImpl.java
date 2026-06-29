@@ -277,4 +277,19 @@ public class EmailServiceImpl implements EmailService {
 
         return inboxMessages;
     }
+
+    @Override
+    public List<EmailMessageResponse> getLogsForCurrentUser() {
+        String email = "";
+        Object principal = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        if (principal instanceof com.orque.crm.auth.entity.User u) {
+            email = u.getEmail();
+        } else {
+            email = "admin@orque.com";
+        }
+        return emailMessageRepository.findByFromEmailOrderBySentAtDesc(email)
+                .stream()
+                .map(this::mapEmailToResponse)
+                .toList();
+    }
 }

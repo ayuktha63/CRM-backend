@@ -11,10 +11,15 @@ import com.orque.crm.enums.AuditAction;
 import com.orque.crm.enums.AuditModule;
 import com.orque.crm.enums.RoleType;
 import com.orque.crm.security.JwtService;
+import com.orque.crm.session.entity.UserSession;
+import com.orque.crm.session.repository.UserSessionRepository;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.time.LocalDateTime;
 
@@ -27,6 +32,7 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuditLogService auditLogService;
+    private final UserSessionRepository sessionRepository;
 
     @Override
     public ApiResponse register(RegisterRequest request) {
@@ -98,6 +104,36 @@ public class AuthServiceImpl implements AuthService {
                 null
         );
 
+        // Update lastLoginAt
+        user.setLastLoginAt(LocalDateTime.now());
+        user.setUpdatedAt(LocalDateTime.now());
+        userRepository.save(user);
+
+        // Record session
+        HttpServletRequest httpReq = null;
+        try {
+            httpReq = ((ServletRequestAttributes) RequestContextHolder.currentRequestAttributes()).getRequest();
+        } catch (Exception ignored) { /* request context not available outside web thread */ }
+        String ip       = httpReq != null ? httpReq.getRemoteAddr() : "unknown";
+        String ua       = httpReq != null ? httpReq.getHeader("User-Agent") : "";
+        String browser  = parseBrowser(ua);
+        String os       = parseOs(ua);
+        String device   = ua != null && ua.toLowerCase().contains("mobile") ? "Mobile" : "Desktop";
+
+        sessionRepository.save(UserSession.builder()
+                .userId(user.getId())
+                .username(user.getUsername())
+                .role(user.getRole().getName().name())
+                .jwtId(accessToken)
+                .loginTime(LocalDateTime.now())
+                .lastActivity(LocalDateTime.now())
+                .ipAddress(ip)
+                .browser(browser)
+                .operatingSystem(os)
+                .device(device)
+                .status("ACTIVE")
+                .build());
+
         return AuthResponse.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
@@ -107,6 +143,25 @@ public class AuthServiceImpl implements AuthService {
                 .email(user.getEmail())
                 .role(user.getRole().getName().name())
                 .build();
+    }
+
+    private String parseBrowser(String ua) {
+        if (ua == null) return "Unknown";
+        if (ua.contains("Edg"))     return "Edge";
+        if (ua.contains("Chrome"))  return "Chrome";
+        if (ua.contains("Firefox")) return "Firefox";
+        if (ua.contains("Safari"))  return "Safari";
+        return "Other";
+    }
+
+    private String parseOs(String ua) {
+        if (ua == null) return "Unknown";
+        if (ua.contains("Windows")) return "Windows";
+        if (ua.contains("Mac"))     return "macOS";
+        if (ua.contains("Linux"))   return "Linux";
+        if (ua.contains("Android")) return "Android";
+        if (ua.contains("iPhone") || ua.contains("iPad")) return "iOS";
+        return "Other";
     }
 
     @Override
@@ -176,6 +231,17 @@ public class AuthServiceImpl implements AuthService {
                     user.getUsername(),
                     null
             );
+
+            try {
+                org.springframework.web.context.request.ServletRequestAttributes attrs = 
+                    (org.springframework.web.context.request.ServletRequestAttributes) org.springframework.web.context.request.RequestContextHolder.currentRequestAttributes();
+                jakarta.servlet.http.HttpServletRequest httpReq = attrs.getRequest();
+                String authHeader = httpReq.getHeader("Authorization");
+                if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                    String jwt = authHeader.substring(7).trim();
+                    sessionRepository.findByJwtId(jwt).ifPresent(sessionRepository::delete);
+                }
+            } catch (Exception ignored) { /* context not available */ }
         }
 
         return new ApiMessageResponse("Logged out successfully");

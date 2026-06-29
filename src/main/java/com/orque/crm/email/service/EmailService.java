@@ -23,4 +23,6 @@ public interface EmailService {
     List<CommunicationHistoryResponse> getContactCommunicationHistory(Long contactId);
 
     List<GmailInboxMessageResponse> getInboxMessages(Long mailboxId);
+
+    List<EmailMessageResponse> getLogsForCurrentUser();
 }

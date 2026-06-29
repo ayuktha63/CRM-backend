@@ -1,5 +1,6 @@
 package com.orque.crm.pipeline.controller;
 
+import com.orque.crm.common.UserContextHelper;
 import com.orque.crm.lead.dto.LeadResponse;
 import com.orque.crm.pipeline.dto.*;
 import com.orque.crm.pipeline.service.PipelineService;
@@ -7,6 +8,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @RestController
@@ -18,7 +20,26 @@ public class PipelineController {
 
     @GetMapping("/board")
     public PipelineBoardResponse getKanbanBoard() {
-        return pipelineService.getKanbanBoard();
+        PipelineBoardResponse board = pipelineService.getKanbanBoard();
+        if (UserContextHelper.isAdmin()) return board;
+
+        List<PipelineStageColumnResponse> filtered = board.getColumns().stream()
+                .map(col -> {
+                    List<LeadResponse> visibleLeads = col.getLeads().stream()
+                            .filter(l -> UserContextHelper.canAccess(l.getAssignedOwner()))
+                            .toList();
+                    BigDecimal total = visibleLeads.stream()
+                            .map(l -> l.getEstimatedValue() != null ? l.getEstimatedValue() : BigDecimal.ZERO)
+                            .reduce(BigDecimal.ZERO, BigDecimal::add);
+                    return PipelineStageColumnResponse.builder()
+                            .stage(col.getStage())
+                            .leads(visibleLeads)
+                            .leadCount((long) visibleLeads.size())
+                            .totalEstimatedValue(total)
+                            .build();
+                })
+                .toList();
+        return PipelineBoardResponse.builder().columns(filtered).build();
     }
 
     @PutMapping("/leads/{leadId}/stage")

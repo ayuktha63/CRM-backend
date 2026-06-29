@@ -1,0 +1,127 @@
+<table width="100%" border="0" cellspacing="0" cellpadding="0" style="font-family: Helvetica, Arial, sans-serif; font-size: 11px; color: #1a1a2e;">
+  <tr>
+    <td>
+      <!-- Header Table -->
+      <table width="100%" border="0" cellspacing="0" cellpadding="0">
+        <tr>
+          <td width="60%" valign="top">
+            <font size="6" color="#0d1b6e"><b>ORQUE CRM</b></font><br/>
+            <font size="2" color="#6b7280">Enterprise Sales Platform</font>
+          </td>
+          <td width="40%" align="right" valign="top">
+            <font size="5" color="#0d1b6e"><b>QUOTATION</b></font><br/>
+            <font size="3" color="#374151"><b>No: {{quoteNumber}}</b></font><br/>
+            <font size="2" color="#6b7280">Date: {{date}}</font><br/>
+            <br/>
+            <font size="2" color="#1d4ed8"><b>Status: {{status}}</b></font>
+          </td>
+        </tr>
+      </table>
+      
+      <br/>
+      <hr style="height: 2px; color: #0d1b6e; background-color: #0d1b6e; border: none;"/>
+      <br/>
+      
+      <!-- Parties Table -->
+      <table width="100%" border="0" cellspacing="0" cellpadding="0">
+        <tr>
+          <td width="33%" valign="top">
+            <font size="2" color="#6b7280"><b>FROM</b></font><br/>
+            <font size="3" color="#0d1b6e"><b>Orque Technologies Pvt. Ltd.</b></font><br/>
+            Enterprise Solutions<br/>
+            contact@orque.io
+          </td>
+          <td width="33%" valign="top">
+            <font size="2" color="#6b7280"><b>PREPARED FOR</b></font><br/>
+            <font size="3" color="#0d1b6e"><b>{{account}}</b></font><br/>
+            Attn: {{contact}}
+          </td>
+          <td width="34%" valign="top">
+            <font size="2" color="#6b7280"><b>PREPARED BY</b></font><br/>
+            <font size="3" color="#0d1b6e"><b>{{createdBy}}</b></font><br/>
+            Sales Representative
+          </td>
+        </tr>
+      </table>
+      
+      <br/><br/>
+      
+      <!-- Line Items Section -->
+      <font size="2" color="#6b7280"><b>LINE ITEMS</b></font><br/><br/>
+      
+      <table width="100%" border="0" cellspacing="0" cellpadding="6" style="border: 1px solid #e5e7eb;">
+        <tr bgcolor="#0d1b6e">
+          <th align="left" width="50%"><font color="#ffffff"><b>Description</b></font></th>
+          <th align="right" width="10%"><font color="#ffffff"><b>Qty</b></font></th>
+          <th align="right" width="20%"><font color="#ffffff"><b>Unit Price (Rs)</b></font></th>
+          <th align="right" width="20%"><font color="#ffffff"><b>Total (Rs)</b></font></th>
+        </tr>
+        <tr bgcolor="#ffffff">
+          <td style="border-bottom: 1px solid #e5e7eb;">Enterprise CRM License - Annual Subscription</td>
+          <td align="right" style="border-bottom: 1px solid #e5e7eb;">1</td>
+          <td align="right" style="border-bottom: 1px solid #e5e7eb;">{{amount}}</td>
+          <td align="right" style="border-bottom: 1px solid #e5e7eb;">{{amount}}</td>
+        </tr>
+      </table>
+      
+      <br/>
+      
+      <!-- Totals Table -->
+      <table width="100%" border="0" cellspacing="0" cellpadding="0">
+        <tr>
+          <td width="55%">&nbsp;</td>
+          <td width="45%">
+            <table width="100%" border="0" cellspacing="0" cellpadding="4" style="border-collapse: collapse;">
+              <tr>
+                <td style="border-bottom: 1px solid #e5e7eb;"><font color="#374151">Subtotal</font></td>
+                <td align="right" style="border-bottom: 1px solid #e5e7eb;">Rs {{amount}}</td>
+              </tr>
+              <tr>
+                <td style="border-bottom: 1px solid #e5e7eb;"><font color="#374151">GST (18%)</font></td>
+                <td align="right" style="border-bottom: 1px solid #e5e7eb;">Rs {{tax}}</td>
+              </tr>
+              <tr>
+                <td><font size="3" color="#0d1b6e"><b>TOTAL</b></font></td>
+                <td align="right"><font size="3" color="#0d1b6e"><b>Rs {{grandTotal}}</b></font></td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+      
+      <br/>
+      
+      <!-- Meta details -->
+      <table width="100%" border="0" cellspacing="0" cellpadding="8" bgcolor="#f3f4f6" style="border-radius: 6px;">
+        <tr>
+          <td width="33%" valign="top">
+            <font size="1" color="#6b7280"><b>VALID UNTIL</b></font><br/>
+            <font size="2" color="#1f2937"><b>{{validUntil}}</b></font>
+          </td>
+          <td width="33%" valign="top">
+            <font size="1" color="#6b7280"><b>PAYMENT TERMS</b></font><br/>
+            <font size="2" color="#1f2937"><b>Net 30 days from invoice date</b></font>
+          </td>
+          <td width="34%" valign="top">
+            <font size="1" color="#6b7280"><b>DELIVERY</b></font><br/>
+            <font size="2" color="#1f2937"><b>Immediate upon payment confirmation</b></font>
+          </td>
+        </tr>
+      </table>
+      
+      <br/><br/>
+      
+      <!-- Footer -->
+      <hr style="height: 1px; color: #e5e7eb; background-color: #e5e7eb; border: none;"/>
+      <br/>
+      <table width="100%" border="0" cellspacing="0" cellpadding="0">
+        <tr>
+          <td><font size="2" color="#6b7280"><b>Orque CRM</b> - orque.io</font></td>
+          <td align="center"><font size="1" color="#9ca3af">This document is computer-generated and valid without signature.</font></td>
+          <td align="right"><font size="1" color="#9ca3af">Generated: {{generatedAt}}</font></td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+</table>

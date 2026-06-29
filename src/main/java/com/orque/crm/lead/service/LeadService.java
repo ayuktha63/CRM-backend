@@ -22,4 +22,12 @@ public interface LeadService {
     LeadResponse getLeadById(Long id);
 
     List<LeadActivityResponse> getLeadActivities(Long leadId);
+
+    LeadResponse qualifyLead(Long id);
+
+    LeadResponse updateLead(Long id, CreateLeadRequest request);
+
+    LeadResponse promoteToQualified(Long id);
+
+    java.util.List<LeadResponse> bulkImportLeads(java.util.List<CreateLeadRequest> requests);
 }

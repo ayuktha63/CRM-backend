@@ -1,5 +1,6 @@
 package com.orque.crm.task.service;
 
+import com.orque.crm.common.UserContextHelper;
 import com.orque.crm.enums.*;
 import com.orque.crm.task.dto.*;
 import com.orque.crm.task.entity.CrmTask;
@@ -24,15 +25,19 @@ public class CrmTaskServiceImpl implements CrmTaskService {
     @Override
     public CrmTaskResponse createTask(CreateCrmTaskRequest request) {
 
+        String currentUser = UserContextHelper.currentUsername();
         CrmTask task = CrmTask.builder()
                 .leadId(request.getLeadId())
                 .contactId(request.getContactId())
+                .relatedId(request.getRelatedId())
                 .title(request.getTitle())
                 .description(request.getDescription())
-                .taskType(request.getTaskType())
-                .priority(request.getPriority())
-                .status(TaskStatus.PENDING)
-                .assignedTo(request.getAssignedTo())
+                .taskType(request.getTaskType() != null ? request.getTaskType() : TaskType.FOLLOW_UP)
+                .priority(request.getPriority() != null ? request.getPriority() : TaskPriority.MEDIUM)
+                .status(request.getStatus() != null ? request.getStatus() : TaskStatus.PENDING)
+                .assignedTo(currentUser)
+                .relatedType(request.getRelatedType())
+                .relatedName(request.getRelatedName())
                 .dueDate(request.getDueDate())
                 .notes(request.getNotes())
                 .createdAt(LocalDateTime.now())
@@ -85,6 +90,8 @@ public class CrmTaskServiceImpl implements CrmTaskService {
         task.setPriority(request.getPriority());
         task.setStatus(request.getStatus());
         task.setAssignedTo(request.getAssignedTo());
+        task.setRelatedType(request.getRelatedType());
+        task.setRelatedName(request.getRelatedName());
         task.setDueDate(request.getDueDate());
         task.setNotes(request.getNotes());
         task.setUpdatedAt(LocalDateTime.now());
@@ -186,6 +193,8 @@ public class CrmTaskServiceImpl implements CrmTaskService {
                 .priority(task.getPriority())
                 .status(task.getStatus())
                 .assignedTo(task.getAssignedTo())
+                .relatedType(task.getRelatedType())
+                .relatedName(task.getRelatedName())
                 .dueDate(task.getDueDate())
                 .notes(task.getNotes())
                 .completedAt(task.getCompletedAt())

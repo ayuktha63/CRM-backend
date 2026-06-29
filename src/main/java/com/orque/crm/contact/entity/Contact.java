@@ -51,6 +51,8 @@ public class Contact {
     @Enumerated(EnumType.STRING)
     private ContactStatus status;
 
+    private String owner;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
