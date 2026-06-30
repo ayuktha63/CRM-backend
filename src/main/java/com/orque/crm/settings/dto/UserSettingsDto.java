@@ -12,6 +12,7 @@ public class UserSettingsDto {
     private String  mailHost;
     private Integer mailPort;
     private String  mailUsername;
+    private String  mailPassword;
     private String  mailFromName;
     private String  mailFromAddress;
     private Boolean mailSslEnabled;

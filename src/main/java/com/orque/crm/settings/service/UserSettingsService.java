@@ -59,6 +59,7 @@ public class UserSettingsService {
         if (d.getMailHost()          != null) s.setMailHost(d.getMailHost());
         if (d.getMailPort()          != null) s.setMailPort(d.getMailPort());
         if (d.getMailUsername()      != null) s.setMailUsername(d.getMailUsername());
+        if (d.getMailPassword()      != null) s.setMailPassword(d.getMailPassword());
         if (d.getMailFromName()      != null) s.setMailFromName(d.getMailFromName());
         if (d.getMailFromAddress()   != null) s.setMailFromAddress(d.getMailFromAddress());
         if (d.getMailSslEnabled()    != null) s.setMailSslEnabled(d.getMailSslEnabled());
@@ -94,6 +95,7 @@ public class UserSettingsService {
                 .mailHost(s.getMailHost())
                 .mailPort(s.getMailPort())
                 .mailUsername(s.getMailUsername())
+                .mailPassword(s.getMailPassword())
                 .mailFromName(s.getMailFromName())
                 .mailFromAddress(s.getMailFromAddress())
                 .mailSslEnabled(s.getMailSslEnabled())

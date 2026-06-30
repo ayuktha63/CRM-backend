@@ -27,6 +27,8 @@ public class EmailServiceImpl implements EmailService {
     private final EmailMessageRepository emailMessageRepository;
     private final CommunicationHistoryRepository communicationHistoryRepository;
     private final AuditLogService auditLogService;
+    private final com.orque.crm.settings.repository.UserSettingsRepository userSettingsRepository;
+
     @Override
     public void connectMailbox(ConnectMailboxRequest request) {
 
@@ -67,9 +69,24 @@ public class EmailServiceImpl implements EmailService {
 
     @Override
     public void sendEmail(SendEmailRequest request) {
+        String username = "system";
+        try {
+            username = com.orque.crm.common.UserContextHelper.currentUsername();
+        } catch (Exception e) {}
 
-        ConnectedMailbox mailbox = connectedMailboxRepository.findById(request.getMailboxId())
-                .orElseThrow(() -> new RuntimeException("Mailbox not found"));
+        com.orque.crm.settings.entity.UserSettings settings = userSettingsRepository.findByUsername(username).orElse(null);
+
+        String fromEmail = "system@orque.com";
+        Long mailboxId = request.getMailboxId();
+        if (settings != null && settings.getMailUsername() != null && !settings.getMailUsername().trim().isEmpty()) {
+            fromEmail = settings.getMailUsername();
+        } else {
+            ConnectedMailbox mailbox = connectedMailboxRepository.findById(request.getMailboxId() != null ? request.getMailboxId() : -1L).orElse(null);
+            if (mailbox != null) {
+                fromEmail = mailbox.getEmailAddress();
+                mailboxId = mailbox.getId();
+            }
+        }
 
         boolean isDraft = Boolean.TRUE.equals(request.getIsDraft());
         boolean isScheduled = request.getScheduledAt() != null && !request.getScheduledAt().trim().isEmpty();
@@ -94,11 +111,20 @@ public class EmailServiceImpl implements EmailService {
             sentTime = null;
         }
 
+        // Try to send real email using Gmail SMTP and App Password if configured
+        if (!isDraft && !isScheduled && settings != null && settings.getMailHost() != null && settings.getMailUsername() != null && settings.getMailPassword() != null) {
+            try {
+                sendRealEmail(settings, request.getToEmail(), request.getCc(), request.getBcc(), request.getSubject(), request.getBody());
+            } catch (Exception e) {
+                System.err.println("SMTP real email send failed: " + e.getMessage());
+            }
+        }
+
         EmailMessage emailMessage = EmailMessage.builder()
-                .mailboxId(mailbox.getId())
+                .mailboxId(mailboxId)
                 .contactId(request.getContactId())
                 .leadId(request.getLeadId())
-                .fromEmail(mailbox.getEmailAddress())
+                .fromEmail(fromEmail)
                 .toEmail(request.getToEmail())
                 .cc(request.getCc())
                 .bcc(request.getBcc())
@@ -120,23 +146,56 @@ public class EmailServiceImpl implements EmailService {
                     .contactId(request.getContactId())
                     .leadId(request.getLeadId())
                     .emailMessageId(savedEmail.getId())
-                    .activityType(isScheduled ? EmailActivityType.EMAIL_SENT : EmailActivityType.EMAIL_SENT) // Keep it simple
+                    .activityType(isScheduled ? EmailActivityType.EMAIL_SENT : EmailActivityType.EMAIL_SENT)
                     .description(isScheduled ? "Email scheduled for " + request.getToEmail() : "Email sent to " + request.getToEmail())
                     .activityAt(LocalDateTime.now())
                     .build();
 
             communicationHistoryRepository.save(history);
             auditLogService.createAudit(
-                    isScheduled ? AuditAction.valueOf("EMAIL_SENT") : AuditAction.EMAIL_SENT, // Fallback if no specific audit
+                    isScheduled ? AuditAction.valueOf("EMAIL_SENT") : AuditAction.EMAIL_SENT,
                     AuditModule.EMAIL,
                     "Email",
                     savedEmail.getId(),
                     null,
                     request.getToEmail(),
                     isScheduled ? "Email scheduled to " + request.getToEmail() : "Email sent to " + request.getToEmail(),
-                    mailbox.getEmailAddress(),
+                    fromEmail,
                     null
             );
+        }
+    }
+
+    private void sendRealEmail(com.orque.crm.settings.entity.UserSettings settings, String to, String cc, String bcc, String subject, String body) {
+        java.util.Properties props = new java.util.Properties();
+        props.put("mail.smtp.auth", "true");
+        props.put("mail.smtp.starttls.enable", "true");
+        props.put("mail.smtp.host", settings.getMailHost() != null ? settings.getMailHost() : "smtp.gmail.com");
+        props.put("mail.smtp.port", settings.getMailPort() != null ? String.valueOf(settings.getMailPort()) : "587");
+
+        jakarta.mail.Session session = jakarta.mail.Session.getInstance(props, new jakarta.mail.Authenticator() {
+            @Override
+            protected jakarta.mail.PasswordAuthentication getPasswordAuthentication() {
+                return new jakarta.mail.PasswordAuthentication(settings.getMailUsername(), settings.getMailPassword());
+            }
+        });
+
+        try {
+            jakarta.mail.Message message = new jakarta.mail.internet.MimeMessage(session);
+            message.setFrom(new jakarta.mail.internet.InternetAddress(settings.getMailFromAddress() != null && !settings.getMailFromAddress().trim().isEmpty() ? settings.getMailFromAddress() : settings.getMailUsername()));
+            message.setRecipients(jakarta.mail.Message.RecipientType.TO, jakarta.mail.internet.InternetAddress.parse(to));
+            if (cc != null && !cc.trim().isEmpty()) {
+                message.setRecipients(jakarta.mail.Message.RecipientType.CC, jakarta.mail.internet.InternetAddress.parse(cc));
+            }
+            if (bcc != null && !bcc.trim().isEmpty()) {
+                message.setRecipients(jakarta.mail.Message.RecipientType.BCC, jakarta.mail.internet.InternetAddress.parse(bcc));
+            }
+            message.setSubject(subject);
+            message.setText(body);
+
+            jakarta.mail.Transport.send(message);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to send SMTP email: " + e.getMessage(), e);
         }
     }
 
@@ -336,10 +395,93 @@ public class EmailServiceImpl implements EmailService {
 
     @Override
     public List<EmailMessageResponse> getEmailsByFolder(String folderName) {
+        if ("INBOX".equalsIgnoreCase(folderName)) {
+            String username = "system";
+            try {
+                username = com.orque.crm.common.UserContextHelper.currentUsername();
+            } catch (Exception e) {}
+            com.orque.crm.settings.entity.UserSettings settings = userSettingsRepository.findByUsername(username).orElse(null);
+            if (settings != null && settings.getMailUsername() != null && settings.getMailPassword() != null) {
+                syncImapInbox(settings);
+            }
+        }
         return emailMessageRepository.findByFolderOrderBySentAtDesc(folderName.toUpperCase())
                 .stream()
                 .map(this::mapEmailToResponse)
                 .toList();
+    }
+
+    private void syncImapInbox(com.orque.crm.settings.entity.UserSettings settings) {
+        if (settings.getMailUsername() == null || settings.getMailPassword() == null) {
+            return;
+        }
+        try {
+            java.util.Properties props = new java.util.Properties();
+            props.put("mail.store.protocol", "imaps");
+            props.put("mail.imaps.host", "imap.gmail.com");
+            props.put("mail.imaps.port", "993");
+            props.put("mail.imaps.ssl.enable", "true");
+
+            jakarta.mail.Session session = jakarta.mail.Session.getInstance(props);
+            jakarta.mail.Store store = session.getStore("imaps");
+            store.connect("imap.gmail.com", settings.getMailUsername(), settings.getMailPassword());
+
+            jakarta.mail.Folder inbox = store.getFolder("INBOX");
+            inbox.open(jakarta.mail.Folder.READ_ONLY);
+
+            int count = inbox.getMessageCount();
+            int start = Math.max(1, count - 19);
+            jakarta.mail.Message[] messages = inbox.getMessages(start, count);
+
+            for (jakarta.mail.Message msg : messages) {
+                String from = "";
+                if (msg.getFrom() != null && msg.getFrom().length > 0) {
+                    from = msg.getFrom()[0].toString();
+                }
+                String subject = msg.getSubject();
+                
+                List<EmailMessage> existing = emailMessageRepository.findByFromEmailOrderBySentAtDesc(from);
+                boolean exists = existing.stream().anyMatch(e -> subject.equals(e.getSubject()));
+                if (exists) {
+                    continue;
+                }
+
+                String body = "";
+                try {
+                    Object content = msg.getContent();
+                    if (content instanceof String) {
+                        body = (String) content;
+                    } else if (content instanceof jakarta.mail.internet.MimeMultipart) {
+                        jakarta.mail.internet.MimeMultipart mp = (jakarta.mail.internet.MimeMultipart) content;
+                        if (mp.getCount() > 0) {
+                            body = mp.getBodyPart(0).getContent().toString();
+                        }
+                    }
+                } catch (Exception ex) {
+                    body = "[HTML Content or Attachments]";
+                }
+
+                EmailMessage emailMessage = EmailMessage.builder()
+                        .fromEmail(from)
+                        .toEmail(settings.getMailUsername())
+                        .subject(subject)
+                        .body(body)
+                        .direction(EmailDirection.INBOUND)
+                        .status(EmailMessageStatus.SENT)
+                        .folder("INBOX")
+                        .isDraft(false)
+                        .sentAt(LocalDateTime.now())
+                        .createdAt(LocalDateTime.now())
+                        .build();
+
+                emailMessageRepository.save(emailMessage);
+            }
+
+            inbox.close(false);
+            store.close();
+        } catch (Exception e) {
+            System.err.println("IMAP sync failed: " + e.getMessage());
+        }
     }
 
     @Override
