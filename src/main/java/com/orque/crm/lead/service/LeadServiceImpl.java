@@ -13,6 +13,16 @@ import com.orque.crm.lead.entity.Lead;
 import com.orque.crm.lead.entity.LeadActivity;
 import com.orque.crm.lead.repository.LeadActivityRepository;
 import com.orque.crm.lead.repository.LeadRepository;
+import com.orque.crm.note.entity.Note;
+import com.orque.crm.note.repository.NoteRepository;
+import com.orque.crm.attachment.entity.Attachment;
+import com.orque.crm.attachment.repository.AttachmentRepository;
+import com.orque.crm.task.entity.CrmTask;
+import com.orque.crm.task.repository.CrmTaskRepository;
+import com.orque.crm.feature.entity.Activity;
+import com.orque.crm.feature.repository.ActivityRepository;
+import com.orque.crm.email.entity.EmailMessage;
+import com.orque.crm.email.repository.EmailMessageRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +40,11 @@ public class LeadServiceImpl implements LeadService {
     private final AccountRepository accountRepository;
     private final DealRepository dealRepository;
     private final AuditLogService auditLogService;
+    private final NoteRepository noteRepository;
+    private final AttachmentRepository attachmentRepository;
+    private final ActivityRepository activityRepository;
+    private final CrmTaskRepository crmTaskRepository;
+    private final EmailMessageRepository emailMessageRepository;
 
     @Override
     public LeadResponse createLead(CreateLeadRequest request) {
@@ -281,6 +296,9 @@ public class LeadServiceImpl implements LeadService {
         lead.setUpdatedAt(LocalDateTime.now());
         Lead saved = leadRepository.save(lead);
 
+        // Migrate related records (notes, tasks, activities, email history, attachments)
+        migrateLeadRelatedRecords(saved, contact, account);
+
         createLeadActivity(saved.getId(), LeadActivityType.LEAD_CONVERTED,
                 "Lead converted: Contact #" + contact.getId()
                 + (account != null ? ", Account #" + account.getId() : "")
@@ -299,6 +317,83 @@ public class LeadServiceImpl implements LeadService {
         );
 
         return mapToLeadResponse(saved);
+    }
+
+    private void migrateLeadRelatedRecords(Lead lead, Contact contact, Account account) {
+        Long leadId = lead.getId();
+
+        // 1. Migrate Notes (clone to Contact and Account)
+        List<Note> leadNotes = noteRepository.findByModuleNameAndRecordIdOrderByCreatedAtDesc("leads", leadId);
+        for (Note note : leadNotes) {
+            noteRepository.save(Note.builder()
+                    .moduleName("contacts")
+                    .recordId(contact.getId())
+                    .content(note.getContent())
+                    .createdBy(note.getCreatedBy())
+                    .build());
+            
+            if (account != null) {
+                noteRepository.save(Note.builder()
+                        .moduleName("accounts")
+                        .recordId(account.getId())
+                        .content(note.getContent())
+                        .createdBy(note.getCreatedBy())
+                        .build());
+            }
+        }
+
+        // 2. Migrate Attachments (clone to Contact and Account)
+        List<Attachment> leadAttachments = attachmentRepository.findByModuleNameAndRecordIdOrderByCreatedAtDesc("leads", leadId);
+        for (Attachment att : leadAttachments) {
+            attachmentRepository.save(Attachment.builder()
+                    .moduleName("contacts")
+                    .recordId(contact.getId())
+                    .fileName(att.getFileName())
+                    .fileSize(att.getFileSize())
+                    .contentType(att.getContentType())
+                    .fileUrl(att.getFileUrl())
+                    .version(att.getVersion())
+                    .createdBy(att.getCreatedBy())
+                    .build());
+            
+            if (account != null) {
+                attachmentRepository.save(Attachment.builder()
+                        .moduleName("accounts")
+                        .recordId(account.getId())
+                        .fileName(att.getFileName())
+                        .fileSize(att.getFileSize())
+                        .contentType(att.getContentType())
+                        .fileUrl(att.getFileUrl())
+                        .version(att.getVersion())
+                        .createdBy(att.getCreatedBy())
+                        .build());
+            }
+        }
+
+        // 3. Migrate Activities (re-associate to Contact)
+        List<Activity> leadActivities = activityRepository.findByRelatedTypeIgnoreCaseAndRelatedId("Lead", leadId);
+        for (Activity act : leadActivities) {
+            act.setRelatedType("Contact");
+            act.setRelatedId(contact.getId());
+            act.setContact(contact.getFullName());
+            activityRepository.save(act);
+        }
+
+        // 4. Migrate Tasks (re-associate to Contact)
+        List<CrmTask> leadTasks = crmTaskRepository.findByLeadId(leadId);
+        for (CrmTask task : leadTasks) {
+            task.setContactId(contact.getId());
+            task.setRelatedType("Contact");
+            task.setRelatedId(contact.getId());
+            crmTaskRepository.save(task);
+        }
+
+        // 5. Migrate Emails (re-associate to Contact)
+        List<EmailMessage> leadEmails = emailMessageRepository.findByLeadId(leadId);
+        for (EmailMessage email : leadEmails) {
+            email.setContactId(contact.getId());
+            emailMessageRepository.save(email);
+        }
     }
 
     @Override
