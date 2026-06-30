@@ -9,6 +9,7 @@ import com.orque.crm.feature.entity.Deal;
 import com.orque.crm.feature.repository.AccountRepository;
 import com.orque.crm.feature.repository.ActivityRepository;
 import com.orque.crm.feature.repository.DealRepository;
+import com.orque.crm.timeline.service.TimelineService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -27,6 +28,7 @@ public class ActivityController {
     private final ContactRepository contactRepository;
     private final DealRepository dealRepository;
     private final AccountRepository accountRepository;
+    private final TimelineService timelineService;
 
     @GetMapping
     public ResponseEntity<List<Activity>> getAll() {
@@ -98,10 +100,14 @@ public class ActivityController {
             existing.setRelatedType(activity.getRelatedType());
             existing.setRelatedName(activity.getRelatedName());
             existing.setRelatedId(activity.getRelatedId());
-            return ResponseEntity.ok(activityRepository.save(existing));
+            Activity saved = activityRepository.save(existing);
+            logActivityToTimelines(saved, "Activity Updated");
+            return ResponseEntity.ok(saved);
         }
         activity.setAssignedTo(currentUsername);
-        return ResponseEntity.ok(activityRepository.save(activity));
+        Activity saved = activityRepository.save(activity);
+        logActivityToTimelines(saved, "Activity Logged");
+        return ResponseEntity.ok(saved);
     }
 
     private void resolveRelatedId(Activity a) {
@@ -138,7 +144,9 @@ public class ActivityController {
         existing.setRelatedType(activity.getRelatedType());
         existing.setRelatedName(activity.getRelatedName());
         existing.setRelatedId(activity.getRelatedId());
-        return ResponseEntity.ok(activityRepository.save(existing));
+        Activity saved = activityRepository.save(existing);
+        logActivityToTimelines(saved, "Activity Updated");
+        return ResponseEntity.ok(saved);
     }
 
     @PostMapping("/approve/{id}")
@@ -146,7 +154,41 @@ public class ActivityController {
         Activity existing = activityRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Activity not found"));
         existing.setStatus("Completed");
-        return ResponseEntity.ok(activityRepository.save(existing));
+        Activity saved = activityRepository.save(existing);
+        logActivityToTimelines(saved, "Activity Completed");
+        return ResponseEntity.ok(saved);
+    }
+
+    private void logActivityToTimelines(Activity activity, String action) {
+        try {
+            String desc = activity.getType() + ": " + activity.getSubject() + 
+                         (activity.getStatus() != null ? " (" + activity.getStatus() + ")" : "");
+            
+            // 1. Log to the primary related entity's timeline
+            if (activity.getRelatedType() != null && activity.getRelatedId() != null) {
+                String module = activity.getRelatedType().toLowerCase();
+                if ("contact".equals(module)) module = "contacts";
+                else if ("account".equals(module)) module = "accounts";
+                else if ("deal".equals(module)) module = "deals";
+                else if ("lead".equals(module)) module = "leads";
+                
+                timelineService.record(module, activity.getRelatedId(), action, desc);
+            }
+
+            // 2. Log to the contact's timeline if logged for a different type and we have a contact name/email
+            boolean isDirectContact = "contact".equalsIgnoreCase(activity.getRelatedType());
+            if (!isDirectContact && activity.getContact() != null && !activity.getContact().isBlank()) {
+                String contactNameOrEmail = activity.getContact();
+                contactRepository.findByEmailIgnoreCase(contactNameOrEmail)
+                        .or(() -> contactRepository.findAll().stream()
+                                .filter(c -> c.getFullName().equalsIgnoreCase(contactNameOrEmail)).findFirst())
+                        .ifPresent(c -> {
+                            timelineService.record("contacts", c.getId(), action, desc + " on related " + activity.getRelatedType() + " '" + activity.getRelatedName() + "'");
+                        });
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to log activity timeline: " + e.getMessage());
+        }
     }
 
     @DeleteMapping("/{id}")
