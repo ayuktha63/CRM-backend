@@ -71,43 +71,73 @@ public class EmailServiceImpl implements EmailService {
         ConnectedMailbox mailbox = connectedMailboxRepository.findById(request.getMailboxId())
                 .orElseThrow(() -> new RuntimeException("Mailbox not found"));
 
+        boolean isDraft = Boolean.TRUE.equals(request.getIsDraft());
+        boolean isScheduled = request.getScheduledAt() != null && !request.getScheduledAt().trim().isEmpty();
+
+        EmailMessageStatus status = EmailMessageStatus.SENT;
+        String folder = "SENT";
+        LocalDateTime scheduledTime = null;
+        LocalDateTime sentTime = LocalDateTime.now();
+
+        if (isDraft) {
+            status = EmailMessageStatus.DRAFT;
+            folder = "DRAFT";
+            sentTime = null;
+        } else if (isScheduled) {
+            status = EmailMessageStatus.SCHEDULED;
+            folder = "SCHEDULED";
+            try {
+                scheduledTime = LocalDateTime.parse(request.getScheduledAt());
+            } catch (Exception e) {
+                scheduledTime = LocalDateTime.now().plusHours(1);
+            }
+            sentTime = null;
+        }
+
         EmailMessage emailMessage = EmailMessage.builder()
                 .mailboxId(mailbox.getId())
                 .contactId(request.getContactId())
                 .leadId(request.getLeadId())
                 .fromEmail(mailbox.getEmailAddress())
                 .toEmail(request.getToEmail())
+                .cc(request.getCc())
+                .bcc(request.getBcc())
                 .subject(request.getSubject())
                 .body(request.getBody())
                 .direction(EmailDirection.OUTBOUND)
-                .status(EmailMessageStatus.SENT)
-                .sentAt(LocalDateTime.now())
+                .status(status)
+                .folder(folder)
+                .isDraft(isDraft)
+                .scheduledAt(scheduledTime)
+                .sentAt(sentTime)
                 .createdAt(LocalDateTime.now())
                 .build();
 
         EmailMessage savedEmail = emailMessageRepository.save(emailMessage);
 
-        CommunicationHistory history = CommunicationHistory.builder()
-                .contactId(request.getContactId())
-                .leadId(request.getLeadId())
-                .emailMessageId(savedEmail.getId())
-                .activityType(EmailActivityType.EMAIL_SENT)
-                .description("Email sent to " + request.getToEmail())
-                .activityAt(LocalDateTime.now())
-                .build();
+        if (!isDraft) {
+            CommunicationHistory history = CommunicationHistory.builder()
+                    .contactId(request.getContactId())
+                    .leadId(request.getLeadId())
+                    .emailMessageId(savedEmail.getId())
+                    .activityType(isScheduled ? EmailActivityType.EMAIL_SENT : EmailActivityType.EMAIL_SENT) // Keep it simple
+                    .description(isScheduled ? "Email scheduled for " + request.getToEmail() : "Email sent to " + request.getToEmail())
+                    .activityAt(LocalDateTime.now())
+                    .build();
 
-        communicationHistoryRepository.save(history);
-        auditLogService.createAudit(
-                AuditAction.EMAIL_SENT,
-                AuditModule.EMAIL,
-                "Email",
-                savedEmail.getId(),
-                null,
-                request.getToEmail(),
-                "Email sent to " + request.getToEmail(),
-                mailbox.getEmailAddress(),
-                null
-        );
+            communicationHistoryRepository.save(history);
+            auditLogService.createAudit(
+                    isScheduled ? AuditAction.valueOf("EMAIL_SENT") : AuditAction.EMAIL_SENT, // Fallback if no specific audit
+                    AuditModule.EMAIL,
+                    "Email",
+                    savedEmail.getId(),
+                    null,
+                    request.getToEmail(),
+                    isScheduled ? "Email scheduled to " + request.getToEmail() : "Email sent to " + request.getToEmail(),
+                    mailbox.getEmailAddress(),
+                    null
+            );
+        }
     }
 
     @Override
@@ -174,6 +204,10 @@ public class EmailServiceImpl implements EmailService {
                 .openCount(emailMessage.getOpenCount() != null ? emailMessage.getOpenCount() : 0)
                 .clickCount(emailMessage.getClickCount() != null ? emailMessage.getClickCount() : 0)
                 .bounceReason(emailMessage.getBounceReason())
+                .cc(emailMessage.getCc())
+                .bcc(emailMessage.getBcc())
+                .scheduledAt(emailMessage.getScheduledAt())
+                .isDraft(emailMessage.getIsDraft())
                 .build();
     }
 

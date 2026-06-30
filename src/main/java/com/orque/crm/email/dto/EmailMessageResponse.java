@@ -43,4 +43,9 @@ public class EmailMessageResponse {
     private Integer openCount;
     private Integer clickCount;
     private String bounceReason;
+
+    private String cc;
+    private String bcc;
+    private LocalDateTime scheduledAt;
+    private Boolean isDraft;
 }

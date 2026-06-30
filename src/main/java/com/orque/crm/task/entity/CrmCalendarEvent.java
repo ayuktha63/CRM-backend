@@ -42,6 +42,11 @@ public class CrmCalendarEvent {
     private String createdBy;
     private LocalDateTime createdAt;
 
+    // Time Zone and Sync
+    private String timeZone;
+    private String syncSource;
+    private String syncId;
+
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();

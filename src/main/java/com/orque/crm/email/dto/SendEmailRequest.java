@@ -13,7 +13,15 @@ public class SendEmailRequest {
 
     private String toEmail;
 
+    private String cc;
+
+    private String bcc;
+
     private String subject;
 
     private String body;
+
+    private String scheduledAt;
+
+    private Boolean isDraft;
 }

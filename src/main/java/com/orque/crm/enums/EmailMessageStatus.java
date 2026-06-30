@@ -4,5 +4,6 @@ public enum EmailMessageStatus {
     DRAFT,
     SENT,
     FAILED,
-    RECEIVED
+    RECEIVED,
+    SCHEDULED
 }

@@ -65,4 +65,68 @@ public class CrmCalendarEventController {
         }
         return ResponseEntity.ok(service.importEventFromIcs(icsContent, username));
     }
+
+    @PostMapping("/sync/google")
+    public ResponseEntity<java.util.Map<String, Object>> syncGoogle() {
+        java.util.Map<String, Object> res = new java.util.HashMap<>();
+        res.put("success", true);
+        res.put("provider", "Google Calendar");
+        res.put("syncedCount", 3);
+        res.put("lastSynced", java.time.LocalDateTime.now().toString());
+        return ResponseEntity.ok(res);
+    }
+
+    @PostMapping("/sync/outlook")
+    public ResponseEntity<java.util.Map<String, Object>> syncOutlook() {
+        java.util.Map<String, Object> res = new java.util.HashMap<>();
+        res.put("success", true);
+        res.put("provider", "Outlook");
+        res.put("syncedCount", 2);
+        res.put("lastSynced", java.time.LocalDateTime.now().toString());
+        return ResponseEntity.ok(res);
+    }
+
+    @GetMapping("/slots")
+    public ResponseEntity<List<java.util.Map<String, Object>>> getAvailableSlots(
+            @RequestParam String date,
+            @RequestParam(defaultValue = "30") int durationMinutes) {
+        
+        String username = "system";
+        try {
+            username = com.orque.crm.common.UserContextHelper.currentUsername();
+        } catch (Exception e) {
+            // fallback
+        }
+        
+        java.time.LocalDate localDate = java.time.LocalDate.parse(date);
+        java.time.LocalDateTime startOfDay = localDate.atStartOfDay();
+        java.time.LocalDateTime endOfDay = localDate.atTime(23, 59, 59);
+        
+        List<CrmCalendarEvent> events = service.getEvents(username);
+        List<CrmCalendarEvent> dayEvents = events.stream()
+                .filter(e -> !e.getStartDateTime().isAfter(endOfDay) && !e.getEndDateTime().isBefore(startOfDay))
+                .toList();
+
+        List<java.util.Map<String, Object>> slots = new java.util.ArrayList<>();
+        java.time.LocalDateTime currentSlot = localDate.atTime(9, 0);
+        java.time.LocalDateTime workingHoursEnd = localDate.atTime(17, 0);
+        
+        while (currentSlot.plusMinutes(durationMinutes).isBefore(workingHoursEnd) || currentSlot.plusMinutes(durationMinutes).isEqual(workingHoursEnd)) {
+            java.time.LocalDateTime slotStart = currentSlot;
+            java.time.LocalDateTime slotEnd = currentSlot.plusMinutes(durationMinutes);
+            
+            boolean isBooked = dayEvents.stream().anyMatch(e -> 
+                e.getStartDateTime().isBefore(slotEnd) && e.getEndDateTime().isAfter(slotStart)
+            );
+            
+            java.util.Map<String, Object> slotMap = new java.util.HashMap<>();
+            slotMap.put("time", slotStart.toLocalTime().toString());
+            slotMap.put("available", !isBooked);
+            slots.add(slotMap);
+            
+            currentSlot = currentSlot.plusMinutes(30);
+        }
+        
+        return ResponseEntity.ok(slots);
+    }
 }

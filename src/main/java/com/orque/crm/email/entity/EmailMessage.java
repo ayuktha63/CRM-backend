@@ -51,6 +51,12 @@ public class EmailMessage {
 
     private LocalDateTime createdAt;
 
+    // CC/BCC/Scheduling
+    private String cc;
+    private String bcc;
+    private LocalDateTime scheduledAt;
+    private Boolean isDraft;
+
     // Email Workspace properties
     private String folder; // INBOX, SENT, DRAFT, TRASH, SPAM, ARCHIVE
     private Boolean isStarred;
