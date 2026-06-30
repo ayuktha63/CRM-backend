@@ -99,8 +99,12 @@ public class EmailController {
     }
 
     @GetMapping("/folder/{folderName}")
-    public ResponseEntity<List<EmailMessageResponse>> getEmailsByFolder(@PathVariable String folderName) {
-        return ResponseEntity.ok(emailService.getEmailsByFolder(folderName));
+    public ResponseEntity<List<EmailMessageResponse>> getEmailsByFolder(
+            @PathVariable String folderName,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        return ResponseEntity.ok(emailService.getEmailsByFolder(folderName, page, size));
     }
 
     @PutMapping("/{id}/folder")

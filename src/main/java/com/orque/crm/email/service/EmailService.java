@@ -26,7 +26,7 @@ public interface EmailService {
 
     List<EmailMessageResponse> getLogsForCurrentUser();
 
-    List<EmailMessageResponse> getEmailsByFolder(String folderName);
+    List<EmailMessageResponse> getEmailsByFolder(String folderName, int page, int size);
 
     void updateEmailFolder(Long id, String folderName);
 
