@@ -34,7 +34,7 @@ import java.time.LocalDateTime;
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
 
-    @Value("${opac.base-url:http://localhost:8082}")
+    @Value("${opac.base-url}")
     private String opacBaseUrl;
 
     private final UserRepository userRepository;

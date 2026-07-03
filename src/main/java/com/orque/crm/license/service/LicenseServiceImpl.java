@@ -31,7 +31,7 @@ import java.util.NoSuchElementException;
 @RequiredArgsConstructor
 public class LicenseServiceImpl implements LicenseService {
 
-    @Value("${opac.base-url:http://localhost:8082}")
+    @Value("${opac.base-url}")
     private String opacBaseUrl;
 
     private final CrmLicenseRepository licenseRepository;
