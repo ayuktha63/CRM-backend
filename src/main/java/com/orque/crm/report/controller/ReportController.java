@@ -2,6 +2,7 @@ package com.orque.crm.report.controller;
 
 import com.orque.crm.auth.repository.UserRepository;
 import com.orque.crm.common.UserContextHelper;
+import com.orque.crm.config.query.QueryMapping;
 import com.orque.crm.enums.RoleType;
 import com.orque.crm.report.dto.*;
 import com.orque.crm.report.service.ReportService;
@@ -77,67 +78,64 @@ public class ReportController {
     public ResponseEntity<List<RecentActivityResponse>> getRecentActivities() {
         return ResponseEntity.ok(reportService.getRecentActivities());
     }
-    @GetMapping("/lead-conversion")
+    /**
+     * QUERY /api/v1/reports/lead-conversion (RFC 10008)
+     * Body: { "startDate": "2024-01-01", "endDate": "2024-12-31", "leadSource": "...", "leadStatus": "..." }
+     */
+    @QueryMapping("/lead-conversion")
     public ResponseEntity<ReportSummaryResponse> getLeadConversionReport(
-            @ModelAttribute ReportFilterRequest filter
-    ) {
-        return ResponseEntity.ok(
-                reportService.getLeadConversionReport(filter)
-        );
+            @RequestBody(required = false) ReportFilterRequest filter) {
+        return ResponseEntity.ok(reportService.getLeadConversionReport(filter != null ? filter : new ReportFilterRequest()));
     }
 
     @GetMapping("/pipeline-performance")
     public ResponseEntity<ReportSummaryResponse> getPipelinePerformanceReport() {
-        return ResponseEntity.ok(
-                reportService.getPipelinePerformanceReport()
-        );
+        return ResponseEntity.ok(reportService.getPipelinePerformanceReport());
     }
 
-    @GetMapping("/revenue")
+    /**
+     * QUERY /api/v1/reports/revenue (RFC 10008)
+     * Body: { "startDate": "...", "endDate": "...", "leadSource": "..." }
+     */
+    @QueryMapping("/revenue")
     public ResponseEntity<ReportSummaryResponse> getRevenueReport(
-            @ModelAttribute ReportFilterRequest filter
-    ) {
-        return ResponseEntity.ok(
-                reportService.getRevenueReport(filter)
-        );
+            @RequestBody(required = false) ReportFilterRequest filter) {
+        return ResponseEntity.ok(reportService.getRevenueReport(filter != null ? filter : new ReportFilterRequest()));
     }
 
     @GetMapping("/monthly-sales-report")
     public ResponseEntity<ReportSummaryResponse> getMonthlySalesReport() {
-        return ResponseEntity.ok(
-                reportService.getMonthlySalesReport()
-        );
+        return ResponseEntity.ok(reportService.getMonthlySalesReport());
     }
 
-    @GetMapping("/campaign-analytics")
+    /**
+     * QUERY /api/v1/reports/campaign-analytics (RFC 10008)
+     * Body: { "startDate": "...", "endDate": "...", "campaignStatus": "ACTIVE" }
+     */
+    @QueryMapping("/campaign-analytics")
     public ResponseEntity<ReportSummaryResponse> getCampaignAnalyticsReport(
-            @ModelAttribute ReportFilterRequest filter
-    ) {
-        return ResponseEntity.ok(
-                reportService.getCampaignAnalyticsReport(filter)
-        );
+            @RequestBody(required = false) ReportFilterRequest filter) {
+        return ResponseEntity.ok(reportService.getCampaignAnalyticsReport(filter != null ? filter : new ReportFilterRequest()));
     }
+
     @GetMapping("/contact-growth")
     public ResponseEntity<ReportSummaryResponse> getContactGrowthReport() {
-        return ResponseEntity.ok(
-                reportService.getContactGrowthReport()
-        );
+        return ResponseEntity.ok(reportService.getContactGrowthReport());
     }
 
     @GetMapping("/task-performance")
     public ResponseEntity<ReportSummaryResponse> getTaskPerformanceReport() {
-        return ResponseEntity.ok(
-                reportService.getTaskPerformanceReport()
-        );
+        return ResponseEntity.ok(reportService.getTaskPerformanceReport());
     }
 
-    @GetMapping("/activity")
+    /**
+     * QUERY /api/v1/reports/activity (RFC 10008)
+     * Body: { "startDate": "...", "endDate": "..." }
+     */
+    @QueryMapping("/activity")
     public ResponseEntity<ReportSummaryResponse> getActivityReport(
-            @ModelAttribute ReportFilterRequest filter
-    ) {
-        return ResponseEntity.ok(
-                reportService.getActivityReport(filter)
-        );
+            @RequestBody(required = false) ReportFilterRequest filter) {
+        return ResponseEntity.ok(reportService.getActivityReport(filter != null ? filter : new ReportFilterRequest()));
     }
     @GetMapping("/dashboard/preferences/{userId}")
     public ResponseEntity<List<DashboardPreferenceResponse>>

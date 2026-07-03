@@ -1,8 +1,10 @@
 package com.orque.crm.contact.controller;
 
 import com.orque.crm.common.ApiResponse;
+import com.orque.crm.config.query.QueryMapping;
 import com.orque.crm.contact.dto.BulkStatusUpdateRequest;
 import com.orque.crm.contact.dto.ContactResponse;
+import com.orque.crm.contact.dto.ContactSearchRequest;
 import com.orque.crm.contact.dto.CreateContactRequest;
 import com.orque.crm.contact.entity.Contact;
 import com.orque.crm.contact.repository.ContactRepository;
@@ -55,9 +57,13 @@ public class ContactController {
         return ResponseEntity.ok(contactService.getContactById(id));
     }
 
-    @GetMapping("/search")
-    public ResponseEntity<List<ContactResponse>> searchContacts(@RequestParam String keyword) {
-        return ResponseEntity.ok(contactService.searchContacts(keyword));
+    /**
+     * HTTP QUERY /api/v1/contacts/search (RFC 10008) — safe, idempotent contact search.
+     * Body: { "keyword": "..." }
+     */
+    @QueryMapping("/search")
+    public ResponseEntity<List<ContactResponse>> searchContacts(@RequestBody ContactSearchRequest request) {
+        return ResponseEntity.ok(contactService.searchContacts(request.getKeyword()));
     }
 
     @GetMapping("/status/{status}")

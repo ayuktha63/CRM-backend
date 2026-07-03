@@ -1,5 +1,7 @@
 package com.orque.crm.search.controller;
 
+import com.orque.crm.config.query.QueryMapping;
+import com.orque.crm.search.dto.SearchQueryRequest;
 import com.orque.crm.search.service.GlobalSearchService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -16,9 +18,16 @@ public class GlobalSearchController {
 
     private final GlobalSearchService service;
 
-    @GetMapping
+    /**
+     * HTTP QUERY /api/v1/search (RFC 10008) — safe and idempotent full-text search
+     * across all CRM entities. Accepts a JSON body instead of a query string to
+     * avoid URI length limits and enable future complex filter extensions.
+     *
+     * Body: { "q": "search term" }
+     */
+    @QueryMapping
     public ResponseEntity<Map<String, List<Map<String, Object>>>> search(
-            @RequestParam("q") String query) {
-        return ResponseEntity.ok(service.searchAll(query));
+            @RequestBody SearchQueryRequest request) {
+        return ResponseEntity.ok(service.searchAll(request.getQ()));
     }
 }
