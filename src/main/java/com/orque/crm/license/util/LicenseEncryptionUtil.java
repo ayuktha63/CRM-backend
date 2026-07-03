@@ -121,7 +121,10 @@ public class LicenseEncryptionUtil {
     @lombok.Builder
     public static class OpacTenant {
         private String tenantName;
-        private String company;
+        /** Field name matches what OPAC generates in the license payload. */
+        @com.fasterxml.jackson.annotation.JsonProperty("companyName")
+        @com.fasterxml.jackson.annotation.JsonAlias({"company", "companyName"})
+        private String companyName;
     }
 
     @lombok.Data

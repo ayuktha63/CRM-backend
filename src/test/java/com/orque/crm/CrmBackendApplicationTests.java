@@ -46,7 +46,7 @@ class CrmBackendApplicationTests {
 
         LicenseEncryptionUtil.OpacTenant systemTenant = LicenseEncryptionUtil.OpacTenant.builder()
                 .tenantName("system")
-                .company("System")
+                .companyName("System")
                 .build();
 
         String systemProdsStr = mapper.writeValueAsString(java.util.Collections.singletonList(systemProduct));
@@ -82,7 +82,7 @@ class CrmBackendApplicationTests {
 
         LicenseEncryptionUtil.OpacTenant defaultTenant = LicenseEncryptionUtil.OpacTenant.builder()
                 .tenantName("default")
-                .company("Default Organization")
+                .companyName("Default Organization")
                 .build();
 
         String defaultProdsStr = mapper.writeValueAsString(java.util.Collections.singletonList(defaultProduct));
@@ -115,7 +115,7 @@ class CrmBackendApplicationTests {
 
         LicenseEncryptionUtil.OpacTenant restrictedTenant = LicenseEncryptionUtil.OpacTenant.builder()
                 .tenantName("default")
-                .company("Default Organization")
+                .companyName("Default Organization")
                 .build();
 
         String restrictedProdsStr = mapper.writeValueAsString(java.util.Collections.singletonList(restrictedProduct));

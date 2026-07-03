@@ -99,7 +99,7 @@ public class AuthServiceImpl implements AuthService {
                 ? (java.util.List<String>) opacResp.get("features") : new java.util.ArrayList<>();
 
         // Find or auto-provision CRM user by username only (never fall back to email)
-        RoleType crmRoleType = "SYSTEM_ADMIN".equals(opacRole) ? RoleType.ADMIN : RoleType.SALES_USER;
+        RoleType crmRoleType = "SYSTEM_ADMIN".equals(opacRole) ? RoleType.SYSTEM_ADMIN : RoleType.SALES_USER;
         final RoleType finalRole = crmRoleType;
         User user = userRepository.findByUsername(username).orElseGet(() -> {
             Role role = roleRepository.findByName(finalRole)
@@ -173,6 +173,7 @@ public class AuthServiceImpl implements AuthService {
                 .role(user.getRole().getName().name())
                 .accessPolicy(features)
                 .tenantName(tenantName)
+                .organizationId(user.getOrganizationId())
                 .licenseWarning(licenseWarning)
                 .build();
     }
@@ -269,7 +270,7 @@ public class AuthServiceImpl implements AuthService {
                 ? (java.util.List<String>) body.get("features") : new java.util.ArrayList<>();
 
             // Map OPAC role → CRM role
-            RoleType crmRoleType = "SYSTEM_ADMIN".equals(opacRole) ? RoleType.ADMIN : RoleType.SALES_USER;
+            RoleType crmRoleType = "SYSTEM_ADMIN".equals(opacRole) ? RoleType.SYSTEM_ADMIN : RoleType.SALES_USER;
 
             // For non-ORQUE tenants, find or create a CRM org for this tenant.
             // Platform owner (ORQUE) has no org — they are true system admins.
@@ -278,6 +279,18 @@ public class AuthServiceImpl implements AuthService {
             if (!isPlatformOwner) {
                 String orgCode = tenantName.toUpperCase();
                 Organization tenantOrg = organizationRepository.findByOrganizationCode(orgCode).orElseGet(() -> {
+                    // No org with this code yet — check if the user already belongs to an org
+                    // (e.g. stale "DEFAULT" org) and update its code in place rather than
+                    // creating a duplicate.
+                    User existingUser = userRepository.findByUsername(username).orElse(null);
+                    if (existingUser != null && existingUser.getOrganizationId() != null) {
+                        Organization existingOrg = organizationRepository.findById(existingUser.getOrganizationId()).orElse(null);
+                        if (existingOrg != null) {
+                            existingOrg.setOrganizationCode(orgCode);
+                            existingOrg.setOrganizationName(tenantName);
+                            return organizationRepository.save(existingOrg);
+                        }
+                    }
                     Organization newOrg = Organization.builder()
                             .organizationCode(orgCode)
                             .organizationName(tenantName)

@@ -240,7 +240,17 @@ public class LicenseServiceImpl implements LicenseService {
             if ("SYSTEM".equalsIgnoreCase(organizationId)) {
                 return new LicenseCheckResult(false, false, 0, "CRM license is not configured", 0);
             }
-            // No license yet — restrict access
+            // No local CRM license — fall back to OPAC master license check.
+            Organization org = orgRepository.findById(organizationId).orElse(null);
+            if (org != null) {
+                LicenseStatusResponse opacStatus = checkOpacMasterLicense(org.getOrganizationCode(), organizationId, org.getOrganizationName());
+                if (opacStatus != null && (opacStatus.getStatus() == LicenseStatus.ACTIVE || opacStatus.getStatus() == LicenseStatus.GRACE)) {
+                    boolean inGrace = opacStatus.getStatus() == LicenseStatus.GRACE;
+                    int graceRemaining = inGrace ? opacStatus.getGraceRemaining() : 0;
+                    int concurrent = opacStatus.getConcurrentUsers();
+                    return new LicenseCheckResult(true, inGrace, graceRemaining, "License active via OPAC master", concurrent);
+                }
+            }
             return new LicenseCheckResult(false, false, 0, "No license configured", 0);
         }
 
@@ -293,7 +303,7 @@ public class LicenseServiceImpl implements LicenseService {
 
         LicenseEncryptionUtil.OpacTenant tenant = LicenseEncryptionUtil.OpacTenant.builder()
                 .tenantName(request.getOrgCode().toLowerCase())
-                .company(request.getOrgCode())
+                .companyName(request.getOrgCode())
                 .build();
 
         try {

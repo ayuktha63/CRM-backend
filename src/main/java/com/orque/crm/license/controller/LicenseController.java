@@ -35,9 +35,15 @@ public class LicenseController {
 
     /** Current user's own org license status (convenience). */
     @GetMapping("/status/me")
-    public ResponseEntity<LicenseStatusResponse> getMyStatus() {
+    public ResponseEntity<LicenseStatusResponse> getMyStatus(
+            @RequestHeader(value = "X-Organization-Id", required = false) String headerOrgId) {
         String orgId = UserContextHelper.currentOrganizationId();
-        if (orgId == null) {
+        // Fall back to the header sent by the frontend interceptor when the user's
+        // DB record doesn't yet have organization_id populated (e.g. pre-SSO login).
+        if (orgId == null || orgId.isBlank()) {
+            orgId = headerOrgId;
+        }
+        if (orgId == null || orgId.isBlank()) {
             return ResponseEntity.ok(LicenseStatusResponse.builder()
                     .organizationName("SYSTEM_ADMIN — no org")
                     .build());
