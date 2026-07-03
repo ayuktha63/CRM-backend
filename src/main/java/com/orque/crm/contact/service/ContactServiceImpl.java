@@ -7,6 +7,7 @@ import com.orque.crm.contact.dto.CreateContactRequest;
 import com.orque.crm.contact.entity.Contact;
 import com.orque.crm.contact.repository.ContactRepository;
 import com.orque.crm.enums.ContactStatus;
+import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.apache.commons.csv.CSVFormat;
@@ -20,6 +21,7 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.NoSuchElementException;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ContactServiceImpl implements ContactService {
@@ -50,46 +52,69 @@ public class ContactServiceImpl implements ContactService {
                 .notes(request.getNotes())
                 .status(request.getStatus() != null ? request.getStatus() : ContactStatus.NEW)
                 .owner(UserContextHelper.currentUsername())
+                .organizationId(UserContextHelper.currentOrganizationId())
                 .createdAt(LocalDateTime.now(ZoneId.systemDefault()))
                 .updatedAt(LocalDateTime.now(ZoneId.systemDefault()))
                 .build();
 
-        return mapToResponse(contactRepository.save(contact));
+        Contact saved = contactRepository.save(contact);
+        log.info("Contact saved: id={}", saved.getId());
+        return mapToResponse(saved);
     }
 
     @Override
     public List<ContactResponse> getAllContacts() {
-        return contactRepository.findAll().stream()
-                .filter(c -> UserContextHelper.canAccess(c.getOwner()))
-                .map(this::mapToResponse)
-                .toList();
+        String orgId = UserContextHelper.scopedOrgId();
+        String owner = UserContextHelper.scopedOwner();
+        if (orgId == null) {
+            return contactRepository.findAll().stream().map(this::mapToResponse).toList();
+        }
+        if (owner == null) {
+            return contactRepository.findByOrganizationId(orgId).stream().map(this::mapToResponse).toList();
+        }
+        return contactRepository.findByOrganizationIdAndOwner(orgId, owner).stream().map(this::mapToResponse).toList();
     }
 
     @Override
     public ContactResponse getContactById(Long id) {
         Contact contact = contactRepository.findById(id)
                 .orElseThrow(() -> new NoSuchElementException(CONTACT_NOT_FOUND));
-        UserContextHelper.assertAccess(contact.getOwner());
+        UserContextHelper.assertAccess(contact.getOrganizationId(), contact.getOwner());
         return mapToResponse(contact);
     }
 
     @Override
     public List<ContactResponse> searchContacts(String keyword) {
-        return contactRepository
-                .findByFullNameContainingIgnoreCaseOrEmailContainingIgnoreCaseOrCompanyContainingIgnoreCase(
-                        keyword, keyword, keyword)
+        String orgId = UserContextHelper.scopedOrgId();
+        String owner = UserContextHelper.scopedOwner();
+        if (orgId == null) {
+            // SYSTEM_ADMIN: search across all orgs
+            return contactRepository
+                    .findByFullNameContainingIgnoreCaseOrEmailContainingIgnoreCaseOrCompanyContainingIgnoreCase(
+                            keyword, keyword, keyword)
+                    .stream().map(this::mapToResponse).toList();
+        }
+        // DB-level org filter — no cross-tenant data loaded
+        return contactRepository.searchByKeywordAndOrg(keyword, orgId)
                 .stream()
-                .filter(c -> UserContextHelper.canAccess(c.getOwner()))
+                .filter(c -> owner == null || UserContextHelper.canAccess(c.getOwner()))
                 .map(this::mapToResponse)
                 .toList();
     }
 
     @Override
     public List<ContactResponse> getContactsByStatus(ContactStatus status) {
-        return contactRepository.findByStatus(status).stream()
-                .filter(c -> UserContextHelper.canAccess(c.getOwner()))
-                .map(this::mapToResponse)
-                .toList();
+        String orgId = UserContextHelper.scopedOrgId();
+        String owner = UserContextHelper.scopedOwner();
+        if (orgId == null) {
+            return contactRepository.findByStatus(status).stream().map(this::mapToResponse).toList();
+        }
+        if (owner == null) {
+            return contactRepository.findByStatusAndOrganizationId(status, orgId)
+                    .stream().map(this::mapToResponse).toList();
+        }
+        return contactRepository.findByStatusAndOrganizationIdAndOwner(status, orgId, owner)
+                .stream().map(this::mapToResponse).toList();
     }
 
     @Override
@@ -123,13 +148,16 @@ public class ContactServiceImpl implements ContactService {
     public void deleteContact(Long id) {
         Contact contact = contactRepository.findById(id)
                 .orElseThrow(() -> new NoSuchElementException(CONTACT_NOT_FOUND));
+        UserContextHelper.assertAccess(contact.getOrganizationId(), contact.getOwner());
         contactRepository.delete(contact);
     }
 
     @Override
     public void updateContactStatus(BulkStatusUpdateRequest request) {
+        String orgId = UserContextHelper.scopedOrgId();
         List<Contact> contacts = contactRepository.findAllById(request.getContactIds());
         for (Contact contact : contacts) {
+            if (orgId != null && !orgId.equals(contact.getOrganizationId())) continue;
             contact.setStatus(request.getStatus());
             contact.setUpdatedAt(LocalDateTime.now(ZoneId.systemDefault()));
         }
@@ -138,6 +166,8 @@ public class ContactServiceImpl implements ContactService {
 
     @Override
     public byte[] exportContactsAsCsv() {
+        String orgId = UserContextHelper.scopedOrgId();
+        String owner = UserContextHelper.scopedOwner();
         try {
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
             OutputStreamWriter writer = new OutputStreamWriter(outputStream, StandardCharsets.UTF_8);
@@ -148,7 +178,15 @@ public class ContactServiceImpl implements ContactService {
                             "State", "City", "Tags", "Status", "Notes")
                     .build());
 
-            for (Contact contact : contactRepository.findAll()) {
+            List<Contact> allContacts = orgId != null
+                    ? contactRepository.findByOrganizationId(orgId)
+                    : contactRepository.findAll();
+            if (owner != null) {
+                allContacts = allContacts.stream()
+                        .filter(c -> owner.equalsIgnoreCase(c.getOwner()))
+                        .toList();
+            }
+            for (Contact contact : allContacts) {
                 csvPrinter.printRecord(
                         contact.getId(), contact.getFullName(), contact.getCompany(),
                         contact.getEmail(), contact.getPhone(), contact.getJobTitle(),

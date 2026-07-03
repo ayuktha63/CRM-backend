@@ -29,6 +29,7 @@ public class SalesOrder {
     @Column(nullable = false)
     private String status; // DRAFT, APPROVED, SHIPPED, DELIVERED
 
+    private String organizationId;
     private String createdBy;
     private LocalDateTime createdAt;
 

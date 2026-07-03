@@ -10,4 +10,7 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     java.util.Optional<Account> findByCompanyNameIgnoreCase(String companyName);
 
     java.util.List<Account> findByOwner(String owner);
+
+    java.util.List<Account> findByOrganizationId(String organizationId);
+    java.util.List<Account> findByOrganizationIdAndOwner(String organizationId, String owner);
 }

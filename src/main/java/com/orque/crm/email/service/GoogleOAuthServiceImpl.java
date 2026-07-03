@@ -5,6 +5,7 @@ import com.orque.crm.email.entity.ConnectedMailbox;
 import com.orque.crm.email.repository.ConnectedMailboxRepository;
 import com.orque.crm.enums.EmailProvider;
 import com.orque.crm.enums.MailboxStatus;
+import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -12,6 +13,7 @@ import org.springframework.web.client.RestTemplate;
 import java.time.LocalDateTime;
 import java.util.Map;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class GoogleOAuthServiceImpl implements GoogleOAuthService {

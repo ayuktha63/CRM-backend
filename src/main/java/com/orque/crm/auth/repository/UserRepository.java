@@ -22,4 +22,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByEmailAndIdNot(String email, Long id);
 
     java.util.List<User> findByRoleName(com.orque.crm.enums.RoleType roleName);
+
+    java.util.List<User> findByOrganizationIdIsNull();
+
+    java.util.List<User> findByOrganizationId(String organizationId);
+
+    long countByOrganizationId(String organizationId);
 }

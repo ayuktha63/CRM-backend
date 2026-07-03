@@ -29,6 +29,7 @@ public class PurchaseOrder {
     @Column(nullable = false)
     private String status; // DRAFT, ORDERED, RECEIVED
 
+    private String organizationId;
     private String createdBy;
     private LocalDateTime createdAt;
 

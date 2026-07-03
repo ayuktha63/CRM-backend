@@ -12,4 +12,7 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
     List<Invoice> findByDealId(Long dealId);
     List<Invoice> findByContactIgnoreCase(String contact);
     List<Invoice> findByAccountIgnoreCase(String account);
+
+    java.util.List<com.orque.crm.feature.entity.Invoice> findByOrganizationId(String organizationId);
+    java.util.List<com.orque.crm.feature.entity.Invoice> findByOrganizationIdAndCreatedBy(String organizationId, String createdBy);
 }

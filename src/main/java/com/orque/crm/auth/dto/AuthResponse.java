@@ -24,4 +24,13 @@ public class AuthResponse {
     private String email;
 
     private String role;
+
+    /** Non-null when the org license is in grace period. Shown as a banner in the UI. */
+    private String licenseWarning;
+
+    /** Feature routes from the OPAC policy that was active at SSO time. Stored as accesspolicy in localStorage. */
+    private java.util.List<String> accessPolicy;
+
+    /** Tenant name from OPAC. Displayed in the topbar so users know which tenant they are operating in. */
+    private String tenantName;
 }

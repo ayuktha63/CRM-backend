@@ -29,4 +29,9 @@ public class CsvImportHistory {
     private Integer duplicateRecords;
 
     private LocalDateTime importedAt;
+
+    /** Tenant isolation — scopes history to the importing user's organization. */
+    private String organizationId;
+
+    private String importedBy;
 }

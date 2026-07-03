@@ -20,6 +20,12 @@ public class ConnectedMailbox {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** Username of the user who owns this mailbox. */
+    private String owner;
+
+    /** Human-readable label shown in the From dropdown. */
+    private String displayName;
+
     private String emailAddress;
 
     @Enumerated(EnumType.STRING)

@@ -30,6 +30,8 @@ public class Vendor {
     @Column(nullable = false)
     private String status; // ACTIVE, INACTIVE
 
+    private String organizationId;
+
     private LocalDateTime createdAt;
 
     @PrePersist

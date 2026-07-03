@@ -5,7 +5,9 @@ import com.orque.crm.auth.entity.Role;
 import com.orque.crm.auth.entity.User;
 import com.orque.crm.auth.repository.RoleRepository;
 import com.orque.crm.auth.repository.UserRepository;
+import com.orque.crm.common.UserContextHelper;
 import com.orque.crm.enums.RoleType;
+import com.orque.crm.license.repository.CrmLicenseRepository;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -26,32 +28,29 @@ public class UserController {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+    private final CrmLicenseRepository licenseRepository;
 
     // ── List ──────────────────────────────────────────────────────────────
     @GetMapping
     public ResponseEntity<List<UserResponse>> getAllUsers() {
-        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        if (principal instanceof User u) {
-            String roleName = u.getRole() != null ? u.getRole().getName().name() : "";
-            if ("ADMIN".equals(roleName) || "SALES_ADMIN".equals(roleName)) {
+        // SYSTEM_ADMIN → all users; Org admin → own org; Sales user → just themselves
+        String orgId = UserContextHelper.scopedOrgId();
+        if (UserContextHelper.isAdmin()) {
+            if (orgId == null) {
                 return ResponseEntity.ok(userRepository.findAll().stream().map(this::toResponse).toList());
-            } else {
-                return ResponseEntity.ok(List.of(toResponse(u)));
             }
+            return ResponseEntity.ok(userRepository.findByOrganizationId(orgId).stream().map(this::toResponse).toList());
         }
-        return ResponseEntity.ok(userRepository.findAll().stream().map(this::toResponse).toList());
+        User me = UserContextHelper.currentUser();
+        return ResponseEntity.ok(me != null ? List.of(toResponse(me)) : List.of());
     }
 
     // ── Get by ID ─────────────────────────────────────────────────────────
     @GetMapping("/{id}")
     public ResponseEntity<?> getUserById(@PathVariable Long id) {
         User user = findUser(id);
-        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        if (principal instanceof User u) {
-            String roleName = u.getRole() != null ? u.getRole().getName().name() : "";
-            if (!"ADMIN".equals(roleName) && !"SALES_ADMIN".equals(roleName) && !u.getId().equals(id)) {
-                return ResponseEntity.status(403).body(Map.of("message", "Access denied."));
-            }
+        if (!UserContextHelper.canAccess(user.getOrganizationId(), user.getUsername())) {
+            return ResponseEntity.status(403).body(Map.of("message", "Access denied."));
         }
         return ResponseEntity.ok(toResponse(user));
     }
@@ -64,6 +63,32 @@ public class UserController {
         if (userRepository.existsByEmail(req.getEmail()))
             return ResponseEntity.badRequest().body(Map.of("message", "Email already exists."));
 
+        // Enforce system-wide license user limit
+        var systemLicense = licenseRepository.findByOrganizationId("SYSTEM").orElse(null);
+        if (systemLicense != null && systemLicense.getConcurrentUsers() != null) {
+            long totalUsers = userRepository.count();
+            if (totalUsers >= systemLicense.getConcurrentUsers()) {
+                return ResponseEntity.badRequest().body(Map.of(
+                    "message", "User limit reached. Please contact system admin for upgrade the license."
+                ));
+            }
+        }
+
+        // Enforce license user limit for org-scoped admins
+        String orgId = UserContextHelper.currentOrganizationId();
+        if (orgId != null && !orgId.isBlank()) {
+            var license = licenseRepository.findByOrganizationId(orgId).orElse(null);
+            if (license != null && license.getMaximumUsers() != null) {
+                long currentCount = userRepository.countByOrganizationId(orgId);
+                if (currentCount >= license.getMaximumUsers()) {
+                    return ResponseEntity.badRequest().body(Map.of(
+                        "message", "User limit reached. Your license allows a maximum of "
+                            + license.getMaximumUsers() + " user(s)."
+                    ));
+                }
+            }
+        }
+
         Role role = resolveRole(req.getRole());
         User user = User.builder()
                 .firstName(req.getFirstName())
@@ -73,6 +98,7 @@ public class UserController {
                 .phone(req.getPhone())
                 .password(passwordEncoder.encode(req.getPassword()))
                 .role(role)
+                .organizationId(orgId)
                 .status(req.getStatus() != null ? req.getStatus() : "ACTIVE")
                 .enabled(true)
                 .createdAt(LocalDateTime.now())
@@ -86,6 +112,9 @@ public class UserController {
     @PutMapping("/{id}")
     public ResponseEntity<?> updateUser(@PathVariable Long id, @Valid @RequestBody UpdateUserRequest req) {
         User user = findUser(id);
+        if (!UserContextHelper.canAccess(user.getOrganizationId(), user.getUsername())) {
+            return ResponseEntity.status(403).body(Map.of("message", "Access denied."));
+        }
 
         if (req.getEmail() != null && userRepository.existsByEmailAndIdNot(req.getEmail(), id))
             return ResponseEntity.badRequest().body(Map.of("message", "Email already in use."));
@@ -109,6 +138,9 @@ public class UserController {
             @PathVariable Long id,
             @Valid @RequestBody ResetPasswordRequest req) {
         User user = findUser(id);
+        if (!UserContextHelper.canAccess(user.getOrganizationId(), user.getUsername())) {
+            return ResponseEntity.status(403).body(Map.of("message", "Access denied."));
+        }
         user.setPassword(passwordEncoder.encode(req.getNewPassword()));
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
@@ -117,8 +149,11 @@ public class UserController {
 
     // ── Activate ──────────────────────────────────────────────────────────
     @PostMapping("/{id}/activate")
-    public ResponseEntity<UserResponse> activateUser(@PathVariable Long id) {
+    public ResponseEntity<?> activateUser(@PathVariable Long id) {
         User user = findUser(id);
+        if (!UserContextHelper.isSystemAdmin() && !UserContextHelper.currentOrganizationId().equals(user.getOrganizationId())) {
+            return ResponseEntity.status(403).body(Map.of("message", "Access denied."));
+        }
         user.setStatus("ACTIVE");
         user.setEnabled(true);
         user.setUpdatedAt(LocalDateTime.now());
@@ -127,8 +162,11 @@ public class UserController {
 
     // ── Deactivate ────────────────────────────────────────────────────────
     @PostMapping("/{id}/deactivate")
-    public ResponseEntity<UserResponse> deactivateUser(@PathVariable Long id) {
+    public ResponseEntity<?> deactivateUser(@PathVariable Long id) {
         User user = findUser(id);
+        if (!UserContextHelper.isSystemAdmin() && !UserContextHelper.currentOrganizationId().equals(user.getOrganizationId())) {
+            return ResponseEntity.status(403).body(Map.of("message", "Access denied."));
+        }
         user.setStatus("INACTIVE");
         user.setEnabled(false);
         user.setUpdatedAt(LocalDateTime.now());
@@ -137,8 +175,11 @@ public class UserController {
 
     // ── Delete ────────────────────────────────────────────────────────────
     @DeleteMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> deleteUser(@PathVariable Long id) {
-        findUser(id);
+    public ResponseEntity<?> deleteUser(@PathVariable Long id) {
+        User user = findUser(id);
+        if (!UserContextHelper.isSystemAdmin() && !UserContextHelper.currentOrganizationId().equals(user.getOrganizationId())) {
+            return ResponseEntity.status(403).body(Map.of("message", "Access denied."));
+        }
         userRepository.deleteById(id);
         return ResponseEntity.ok(Map.of("success", true, "message", "User deleted."));
     }
@@ -146,12 +187,14 @@ public class UserController {
     // ── Sales users list (for reassignment) ──────────────────────────────
     @GetMapping("/sales")
     public ResponseEntity<List<UserResponse>> getSalesUsers() {
-        List<UserResponse> sales = userRepository.findByRoleName(RoleType.SALES).stream()
-                .map(this::toResponse).toList();
-        List<UserResponse> admins = userRepository.findByRoleName(RoleType.SALES_ADMIN).stream()
-                .map(this::toResponse).toList();
-        return ResponseEntity.ok(
-                java.util.stream.Stream.concat(admins.stream(), sales.stream()).toList());
+        String orgId = UserContextHelper.scopedOrgId();
+        java.util.stream.Stream<UserResponse> sales = userRepository.findByRoleName(RoleType.SALES).stream()
+                .filter(u -> orgId == null || orgId.equals(u.getOrganizationId()))
+                .map(this::toResponse);
+        java.util.stream.Stream<UserResponse> admins = userRepository.findByRoleName(RoleType.SALES_ADMIN).stream()
+                .filter(u -> orgId == null || orgId.equals(u.getOrganizationId()))
+                .map(this::toResponse);
+        return ResponseEntity.ok(java.util.stream.Stream.concat(admins, sales).toList());
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────

@@ -18,6 +18,8 @@ public interface CrmTaskRepository extends JpaRepository<CrmTask, Long> {
     List<CrmTask> findByContactId(Long contactId);
 
     List<CrmTask> findByStatus(TaskStatus status);
+    List<CrmTask> findByOrganizationId(String organizationId);
+    List<CrmTask> findByOrganizationIdAndAssignedTo(String organizationId, String assignedTo);
 
     List<CrmTask> findByPriority(TaskPriority priority);
 

@@ -6,4 +6,5 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface PriceBookRepository extends JpaRepository<PriceBook, Long> {
+    java.util.List<PriceBook> findByOrganizationId(String organizationId);
 }

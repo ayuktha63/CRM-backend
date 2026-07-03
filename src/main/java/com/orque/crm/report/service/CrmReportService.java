@@ -1,5 +1,6 @@
 package com.orque.crm.report.service;
 
+import com.orque.crm.common.UserContextHelper;
 import com.orque.crm.report.entity.CrmReport;
 import com.orque.crm.report.repository.CrmReportRepository;
 import jakarta.persistence.EntityManager;
@@ -21,7 +22,9 @@ public class CrmReportService {
     private EntityManager entityManager;
 
     public List<CrmReport> getReports() {
-        return repository.findAll();
+        // Return reports shared publicly OR created by current user
+        return repository.findByShareTypeIgnoreCaseOrCreatedByIgnoreCase(
+                "PUBLIC", UserContextHelper.currentUsername());
     }
 
     @Transactional

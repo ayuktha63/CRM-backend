@@ -5,14 +5,17 @@ import com.orque.crm.campaign.entity.*;
 import com.orque.crm.campaign.repository.*;
 import com.orque.crm.enums.CampaignRecipientStatus;
 import com.orque.crm.enums.CampaignStatus;
+import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import com.orque.crm.audit.service.AuditLogService;
+import com.orque.crm.common.UserContextHelper;
 import com.orque.crm.enums.AuditAction;
 import com.orque.crm.enums.AuditModule;
 import java.time.LocalDateTime;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CampaignServiceImpl implements CampaignService {
@@ -32,11 +35,13 @@ public class CampaignServiceImpl implements CampaignService {
                 .subjectLine(request.getSubjectLine())
                 .emailBody(request.getEmailBody())
                 .mailboxId(request.getMailboxId())
+                .organizationId(UserContextHelper.currentOrganizationId())
                 .status(CampaignStatus.DRAFT)
                 .createdAt(LocalDateTime.now())
                 .build();
 
         Campaign saved = campaignRepository.save(campaign);
+        log.info("Campaign saved");
 
         CampaignMetrics metrics = CampaignMetrics.builder()
                 .campaignId(saved.getId())
@@ -66,8 +71,14 @@ public class CampaignServiceImpl implements CampaignService {
 
     @Override
     public List<CampaignResponse> getAllCampaigns() {
-        return campaignRepository.findAll()
-                .stream()
+        String orgId = UserContextHelper.scopedOrgId();
+        List<Campaign> campaigns;
+        if (orgId == null) {
+            campaigns = campaignRepository.findAll();
+        } else {
+            campaigns = campaignRepository.findByOrganizationId(orgId);
+        }
+        return campaigns.stream()
                 .map(this::mapCampaignToResponse)
                 .toList();
     }

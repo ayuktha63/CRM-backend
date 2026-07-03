@@ -16,15 +16,14 @@ public class AuthController {
 
     private final AuthService authService;
 
+    // Self-registration is disabled. All CRM users are provisioned via OPAC user_master.
+    // Users authenticate through /login (delegates to OPAC) or /sso (SSO token from OPAC).
     @PostMapping("/register")
     public ResponseEntity<ApiResponse> register(
             @Valid @RequestBody RegisterRequest request
     ) {
-
-        ApiResponse response =
-                authService.register(request);
-
-        return ResponseEntity.ok(response);
+        return ResponseEntity.status(403).body(new ApiResponse(false,
+            "Self-registration is not allowed. Contact your system administrator to create your account in OPAC."));
     }
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(
@@ -54,6 +53,18 @@ public class AuthController {
 
         return ResponseEntity.ok(response);
     }
+    @PostMapping("/sso")
+    public ResponseEntity<AuthResponse> ssoLogin(
+            @RequestBody java.util.Map<String, String> body
+    ) {
+        String token = body.get("token");
+        if (token == null || token.isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
+        AuthResponse response = authService.ssoLogin(token);
+        return ResponseEntity.ok(response);
+    }
+
     @PostMapping("/logout")
     public ResponseEntity<ApiMessageResponse> logout() {
 

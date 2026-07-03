@@ -8,6 +8,10 @@ public interface EmailService {
 
     void connectMailbox(ConnectMailboxRequest request);
 
+    List<MailboxResponse> listMailboxes();
+
+    void deleteMailbox(Long id);
+
     EmailTemplateResponse createTemplate(EmailTemplateRequest request);
 
     List<EmailTemplateResponse> getTemplates();
@@ -26,7 +30,7 @@ public interface EmailService {
 
     List<EmailMessageResponse> getLogsForCurrentUser();
 
-    List<EmailMessageResponse> getEmailsByFolder(String folderName, int page, int size);
+    EmailFolderPage getEmailsByFolder(String folderName, int page, int size);
 
     void updateEmailFolder(Long id, String folderName);
 
@@ -35,4 +39,8 @@ public interface EmailService {
     void recordEmailOpen(Long id);
 
     void recordEmailClick(Long id);
+
+    void markEmailRead(Long id, boolean read);
+
+    void deleteEmailPermanently(Long id);
 }

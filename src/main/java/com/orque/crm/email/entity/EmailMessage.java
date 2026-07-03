@@ -19,6 +19,10 @@ public class EmailMessage {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+    /** Organization this record belongs to. Populated automatically by the backend. */
+    @Column(length = 36)
+    private String organizationId;
+
 
     private Long mailboxId;
 
@@ -64,4 +68,9 @@ public class EmailMessage {
     private Integer openCount;
     private Integer clickCount;
     private String bounceReason;
+
+    private Boolean isRead;
+
+    /** Username of the CRM user who owns this email message. */
+    private String owner;
 }

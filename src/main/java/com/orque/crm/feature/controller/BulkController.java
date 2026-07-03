@@ -1,5 +1,6 @@
 package com.orque.crm.feature.controller;
 
+import com.orque.crm.common.UserContextHelper;
 import com.orque.crm.contact.entity.Contact;
 import com.orque.crm.contact.repository.ContactRepository;
 import com.orque.crm.feature.entity.Account;
@@ -24,16 +25,35 @@ public class BulkController {
     private final AccountRepository accountRepository;
     private final DealRepository dealRepository;
 
+    /** Verifies every ID in the list belongs to the caller's organization before acting. */
+    private <T> List<T> ownedOnly(List<T> items, java.util.function.Function<T, String> orgIdGetter) {
+        String myOrg = UserContextHelper.currentOrganizationId();
+        if (myOrg == null) return items; // no org context — shouldn't happen in CRM
+        return items.stream().filter(i -> myOrg.equals(orgIdGetter.apply(i))).toList();
+    }
+
     @PostMapping("/delete")
     public ResponseEntity<Map<String, Object>> bulkDelete(
             @RequestParam String module,
             @RequestBody List<Long> ids) {
-        
+
         switch (module.toLowerCase()) {
-            case "leads" -> leadRepository.deleteAllById(ids);
-            case "contacts" -> contactRepository.deleteAllById(ids);
-            case "accounts" -> accountRepository.deleteAllById(ids);
-            case "deals" -> dealRepository.deleteAllById(ids);
+            case "leads" -> {
+                List<Lead> items = ownedOnly(leadRepository.findAllById(ids), Lead::getOrganizationId);
+                leadRepository.deleteAll(items);
+            }
+            case "contacts" -> {
+                List<Contact> items = ownedOnly(contactRepository.findAllById(ids), Contact::getOrganizationId);
+                contactRepository.deleteAll(items);
+            }
+            case "accounts" -> {
+                List<Account> items = ownedOnly(accountRepository.findAllById(ids), Account::getOrganizationId);
+                accountRepository.deleteAll(items);
+            }
+            case "deals" -> {
+                List<Deal> items = ownedOnly(dealRepository.findAllById(ids), Deal::getOrganizationId);
+                dealRepository.deleteAll(items);
+            }
             default -> throw new RuntimeException("Invalid module: " + module);
         }
         
@@ -51,28 +71,28 @@ public class BulkController {
         
         switch (module.toLowerCase()) {
             case "leads" -> {
-                List<Lead> items = leadRepository.findAllById(ids);
+                List<Lead> items = ownedOnly(leadRepository.findAllById(ids), Lead::getOrganizationId);
                 items.forEach(i -> i.setAssignedOwner(owner));
                 leadRepository.saveAll(items);
             }
             case "contacts" -> {
-                List<Contact> items = contactRepository.findAllById(ids);
+                List<Contact> items = ownedOnly(contactRepository.findAllById(ids), Contact::getOrganizationId);
                 items.forEach(i -> i.setOwner(owner));
                 contactRepository.saveAll(items);
             }
             case "accounts" -> {
-                List<Account> items = accountRepository.findAllById(ids);
+                List<Account> items = ownedOnly(accountRepository.findAllById(ids), Account::getOrganizationId);
                 items.forEach(i -> i.setOwner(owner));
                 accountRepository.saveAll(items);
             }
             case "deals" -> {
-                List<Deal> items = dealRepository.findAllById(ids);
+                List<Deal> items = ownedOnly(dealRepository.findAllById(ids), Deal::getOrganizationId);
                 items.forEach(i -> i.setAssignedTo(owner));
                 dealRepository.saveAll(items);
             }
             default -> throw new RuntimeException("Invalid module: " + module);
         }
-        
+
         Map<String, Object> resp = new HashMap<>();
         resp.put("success", true);
         resp.put("count", ids.size());
@@ -84,10 +104,10 @@ public class BulkController {
             @RequestParam String module,
             @RequestParam String status,
             @RequestBody List<Long> ids) {
-        
+
         switch (module.toLowerCase()) {
             case "leads" -> {
-                List<Lead> items = leadRepository.findAllById(ids);
+                List<Lead> items = ownedOnly(leadRepository.findAllById(ids), Lead::getOrganizationId);
                 try {
                     com.orque.crm.enums.LeadStatus enumVal = com.orque.crm.enums.LeadStatus.valueOf(status.toUpperCase());
                     items.forEach(i -> i.setStatus(enumVal));
@@ -97,12 +117,12 @@ public class BulkController {
                 }
             }
             case "deals" -> {
-                List<Deal> items = dealRepository.findAllById(ids);
+                List<Deal> items = ownedOnly(dealRepository.findAllById(ids), Deal::getOrganizationId);
                 items.forEach(i -> i.setStage(status));
                 dealRepository.saveAll(items);
             }
             case "accounts" -> {
-                List<Account> items = accountRepository.findAllById(ids);
+                List<Account> items = ownedOnly(accountRepository.findAllById(ids), Account::getOrganizationId);
                 items.forEach(i -> i.setStatus(status));
                 accountRepository.saveAll(items);
             }
@@ -124,28 +144,22 @@ public class BulkController {
         
         switch (module.toLowerCase()) {
             case "leads" -> {
-                List<Lead> items = leadRepository.findAllById(ids);
-                for (Lead lead : items) {
-                    setLeadField(lead, fieldName, fieldValue);
-                }
+                List<Lead> items = ownedOnly(leadRepository.findAllById(ids), Lead::getOrganizationId);
+                items.forEach(lead -> setLeadField(lead, fieldName, fieldValue));
                 leadRepository.saveAll(items);
             }
             case "contacts" -> {
-                List<Contact> items = contactRepository.findAllById(ids);
-                for (Contact contact : items) {
-                    setContactField(contact, fieldName, fieldValue);
-                }
+                List<Contact> items = ownedOnly(contactRepository.findAllById(ids), Contact::getOrganizationId);
+                items.forEach(contact -> setContactField(contact, fieldName, fieldValue));
                 contactRepository.saveAll(items);
             }
             case "accounts" -> {
-                List<Account> items = accountRepository.findAllById(ids);
-                for (Account account : items) {
-                    setAccountField(account, fieldName, fieldValue);
-                }
+                List<Account> items = ownedOnly(accountRepository.findAllById(ids), Account::getOrganizationId);
+                items.forEach(account -> setAccountField(account, fieldName, fieldValue));
                 accountRepository.saveAll(items);
             }
             case "deals" -> {
-                List<Deal> items = dealRepository.findAllById(ids);
+                List<Deal> items = ownedOnly(dealRepository.findAllById(ids), Deal::getOrganizationId);
                 for (Deal deal : items) {
                     setDealField(deal, fieldName, fieldValue);
                 }

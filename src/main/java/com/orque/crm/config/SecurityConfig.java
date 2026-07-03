@@ -1,6 +1,7 @@
 package com.orque.crm.config;
 
 import com.orque.crm.security.JwtAuthenticationFilter;
+import com.orque.crm.security.LicenseValidationFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -18,6 +19,7 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final LicenseValidationFilter licenseValidationFilter;
 
     @Bean
     public SecurityFilterChain securityFilterChain(
@@ -41,6 +43,10 @@ public class SecurityConfig {
                 .addFilterBefore(
                         jwtAuthenticationFilter,
                         UsernamePasswordAuthenticationFilter.class
+                )
+                .addFilterAfter(
+                        licenseValidationFilter,
+                        JwtAuthenticationFilter.class
                 );
 
         return http.build();

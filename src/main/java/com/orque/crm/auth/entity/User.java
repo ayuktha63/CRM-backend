@@ -40,6 +40,10 @@ public class User {
     @Column(length = 20)
     private String status;   // ACTIVE | INACTIVE
 
+    /** Foreign key to organizations.id — null for SYSTEM_ADMIN */
+    @Column(length = 36)
+    private String organizationId;
+
     private LocalDateTime lastLoginAt;
 
     @ManyToOne

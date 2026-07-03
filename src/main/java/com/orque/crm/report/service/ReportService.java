@@ -6,9 +6,10 @@ import java.util.List;
 
 public interface ReportService {
 
-    DashboardSummaryResponse getDashboardSummary();
+    /** Returns stats scoped to {@code scopedUsername}. Pass null for admin combined view. */
+    DashboardSummaryResponse getDashboardSummary(String scopedUsername);
 
-    List<MonthlySalesTrendResponse> getMonthlySalesTrend();
+    List<MonthlySalesTrendResponse> getMonthlySalesTrend(String scopedUsername);
 
     List<LeadSourceDistributionResponse> getLeadSourceDistribution();
 

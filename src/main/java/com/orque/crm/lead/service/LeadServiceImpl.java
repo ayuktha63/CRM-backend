@@ -23,6 +23,7 @@ import com.orque.crm.feature.entity.Activity;
 import com.orque.crm.feature.repository.ActivityRepository;
 import com.orque.crm.email.entity.EmailMessage;
 import com.orque.crm.email.repository.EmailMessageRepository;
+import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +31,7 @@ import com.orque.crm.enums.AuditModule;
 import java.time.LocalDateTime;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class LeadServiceImpl implements LeadService {
@@ -82,11 +84,13 @@ public class LeadServiceImpl implements LeadService {
                 .notes(request.getNotes())
                 .estimatedValue(request.getEstimatedValue())
                 .expectedCloseDate(request.getExpectedCloseDate())
+                .organizationId(com.orque.crm.common.UserContextHelper.currentOrganizationId())
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
 
         Lead savedLead = leadRepository.save(lead);
+        log.info("Lead saved: id={}, name={}", savedLead.getId(), savedLead.getFullName());
 
         createLeadActivity(
                 savedLead.getId(),
@@ -203,10 +207,21 @@ public class LeadServiceImpl implements LeadService {
 
     @Override
     public List<LeadResponse> getAllLeads() {
-        return leadRepository.findAll()
-                .stream()
-                .map(this::mapToLeadResponse)
-                .toList();
+        String orgId = com.orque.crm.common.UserContextHelper.scopedOrgId();
+        String owner = com.orque.crm.common.UserContextHelper.scopedOwner();
+
+        List<com.orque.crm.lead.entity.Lead> leads;
+        if (orgId == null) {
+            // SYSTEM_ADMIN — see everything
+            leads = leadRepository.findAll();
+        } else if (owner == null) {
+            // Org admin — all leads in org
+            leads = leadRepository.findByOrganizationId(orgId);
+        } else {
+            // Sales user — own leads in org
+            leads = leadRepository.findByOrganizationIdAndAssignedOwner(orgId, owner);
+        }
+        return leads.stream().map(this::mapToLeadResponse).toList();
     }
 
     @Override
@@ -295,6 +310,7 @@ public class LeadServiceImpl implements LeadService {
         lead.setContactId(contact.getId());
         lead.setUpdatedAt(LocalDateTime.now());
         Lead saved = leadRepository.save(lead);
+        log.info("Lead updated: id={}", saved.getId());
 
         // Migrate related records (notes, tasks, activities, email history, attachments)
         migrateLeadRelatedRecords(saved, contact, account);

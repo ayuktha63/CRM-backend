@@ -26,4 +26,7 @@ public interface EmailMessageRepository
     Page<EmailMessage> findByFolderAndUserEmail(@Param("folder") String folder, @Param("email") String email, Pageable pageable);
 
     Page<EmailMessage> findByFolderOrderBySentAtDesc(String folder, Pageable pageable);
+
+    @Query("SELECT e FROM EmailMessage e WHERE UPPER(e.folder) = UPPER(:folder) AND e.owner = :owner ORDER BY COALESCE(e.sentAt, e.createdAt) DESC")
+    Page<EmailMessage> findByFolderAndOwner(@Param("folder") String folder, @Param("owner") String owner, Pageable pageable);
 }

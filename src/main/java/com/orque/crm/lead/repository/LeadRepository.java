@@ -14,6 +14,12 @@ public interface LeadRepository extends JpaRepository<Lead, Long> {
     boolean existsByContactId(Long contactId);
 
     List<Lead> findByStatus(LeadStatus status);
+    List<Lead> findByAssignedOwner(String assignedOwner);
     List<Lead> findByAssignedOwnerContainingIgnoreCase(String assignedOwner);
     List<Lead> findByPipelineStage(PipelineStage pipelineStage);
+
+    List<Lead> findByOrganizationId(String organizationId);
+    List<Lead> findByOrganizationIdAndAssignedOwner(String organizationId, String assignedOwner);
+    List<Lead> findByOrganizationIdAndStatus(String organizationId, LeadStatus status);
+    List<Lead> findByOrganizationIdAndPipelineStage(String organizationId, PipelineStage pipelineStage);
 }

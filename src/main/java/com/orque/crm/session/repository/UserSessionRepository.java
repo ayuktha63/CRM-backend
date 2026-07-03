@@ -32,4 +32,8 @@ public interface UserSessionRepository extends JpaRepository<UserSession, Long> 
 
     @Query("SELECT COUNT(s) FROM UserSession s WHERE s.loginTime >= :since")
     long countLoginsToday(LocalDateTime since);
+
+    long countByUsernameAndStatus(String username, String status);
+
+    List<UserSession> findByUsernameIn(java.util.Collection<String> usernames);
 }

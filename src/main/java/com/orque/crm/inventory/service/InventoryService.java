@@ -1,5 +1,6 @@
 package com.orque.crm.inventory.service;
 
+import com.orque.crm.common.UserContextHelper;
 import com.orque.crm.inventory.entity.*;
 import com.orque.crm.inventory.repository.*;
 import com.orque.crm.timeline.service.TimelineService;
@@ -25,17 +26,31 @@ public class InventoryService {
     private final SalesOrderRepository salesOrderRepository;
     private final TimelineService timelineService;
 
+    private String orgId() { return UserContextHelper.currentOrganizationId(); }
+
     // ── Vendor Actions ──
-    public List<Vendor> getVendors() { return vendorRepository.findAll(); }
-    
+    public List<Vendor> getVendors() {
+        String org = orgId();
+        return org != null ? vendorRepository.findByOrganizationId(org) : vendorRepository.findAll();
+    }
+
     @Transactional
-    public Vendor saveVendor(Vendor vendor) { return vendorRepository.save(vendor); }
+    public Vendor saveVendor(Vendor vendor) {
+        if (vendor.getOrganizationId() == null) vendor.setOrganizationId(orgId());
+        return vendorRepository.save(vendor);
+    }
 
     // ── Price Book Actions ──
-    public List<PriceBook> getPriceBooks() { return priceBookRepository.findAll(); }
-    
+    public List<PriceBook> getPriceBooks() {
+        String org = orgId();
+        return org != null ? priceBookRepository.findByOrganizationId(org) : priceBookRepository.findAll();
+    }
+
     @Transactional
-    public PriceBook savePriceBook(PriceBook book) { return priceBookRepository.save(book); }
+    public PriceBook savePriceBook(PriceBook book) {
+        if (book.getOrganizationId() == null) book.setOrganizationId(orgId());
+        return priceBookRepository.save(book);
+    }
 
     @Transactional
     public PriceBookEntry savePriceBookEntry(PriceBookEntry entry) { return priceBookEntryRepository.save(entry); }
@@ -48,10 +63,16 @@ public class InventoryService {
     }
 
     // ── Warehouse Stock Actions ──
-    public List<Warehouse> getWarehouses() { return warehouseRepository.findAll(); }
-    
+    public List<Warehouse> getWarehouses() {
+        String org = orgId();
+        return org != null ? warehouseRepository.findByOrganizationId(org) : warehouseRepository.findAll();
+    }
+
     @Transactional
-    public Warehouse saveWarehouse(Warehouse warehouse) { return warehouseRepository.save(warehouse); }
+    public Warehouse saveWarehouse(Warehouse warehouse) {
+        if (warehouse.getOrganizationId() == null) warehouse.setOrganizationId(orgId());
+        return warehouseRepository.save(warehouse);
+    }
 
     public List<WarehouseStock> getWarehouseStock(Long warehouseId) {
         return warehouseStockRepository.findByWarehouseId(warehouseId);
@@ -77,11 +98,15 @@ public class InventoryService {
     }
 
     // ── Purchase Order Actions ──
-    public List<PurchaseOrder> getPurchaseOrders() { return purchaseOrderRepository.findAll(); }
+    public List<PurchaseOrder> getPurchaseOrders() {
+        String org = orgId();
+        return org != null ? purchaseOrderRepository.findByOrganizationId(org) : purchaseOrderRepository.findAll();
+    }
 
     @Transactional
     public PurchaseOrder savePurchaseOrder(PurchaseOrder po, String username) {
         po.setCreatedBy(username);
+        if (po.getOrganizationId() == null) po.setOrganizationId(orgId());
         PurchaseOrder saved = purchaseOrderRepository.save(po);
 
         // If PO status changed to RECEIVED, auto-increment stock levels
@@ -93,11 +118,15 @@ public class InventoryService {
     }
 
     // ── Sales Order Actions ──
-    public List<SalesOrder> getSalesOrders() { return salesOrderRepository.findAll(); }
+    public List<SalesOrder> getSalesOrders() {
+        String org = orgId();
+        return org != null ? salesOrderRepository.findByOrganizationId(org) : salesOrderRepository.findAll();
+    }
 
     @Transactional
     public SalesOrder saveSalesOrder(SalesOrder so, String username) {
         so.setCreatedBy(username);
+        if (so.getOrganizationId() == null) so.setOrganizationId(orgId());
         SalesOrder saved = salesOrderRepository.save(so);
 
         // If SO status changed to SHIPPED, auto-decrement stock levels

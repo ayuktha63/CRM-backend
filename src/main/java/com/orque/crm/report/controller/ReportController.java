@@ -1,5 +1,8 @@
 package com.orque.crm.report.controller;
 
+import com.orque.crm.auth.repository.UserRepository;
+import com.orque.crm.common.UserContextHelper;
+import com.orque.crm.enums.RoleType;
 import com.orque.crm.report.dto.*;
 import com.orque.crm.report.service.ReportService;
 import lombok.RequiredArgsConstructor;
@@ -11,6 +14,7 @@ import com.orque.crm.report.export.PdfExportService;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/reports")
@@ -19,18 +23,44 @@ public class ReportController {
 
     private final ReportService reportService;
     private final CsvExportService csvExportService;
-
     private final ExcelExportService excelExportService;
-
     private final PdfExportService pdfExportService;
+    private final UserRepository userRepository;
+
+    /**
+     * List all sales users — admin-only endpoint for the dashboard user-picker dropdown.
+     * Returns [{username, displayName}] sorted by username.
+     */
+    @GetMapping("/admin/users")
+    public ResponseEntity<List<Map<String, String>>> listSalesUsers() {
+        if (!UserContextHelper.isAdmin()) {
+            return ResponseEntity.status(403).build();
+        }
+        String orgId = UserContextHelper.scopedOrgId();
+        List<Map<String, String>> users = userRepository.findAll().stream()
+                .filter(u -> u.getRole() != null)
+                .filter(u -> u.getRole().getName() != RoleType.ADMIN)
+                .filter(u -> orgId == null || orgId.equals(u.getOrganizationId()))
+                .sorted(java.util.Comparator.comparing(u -> u.getUsername()))
+                .map(u -> Map.of(
+                        "username", u.getUsername(),
+                        "displayName", (u.getFirstName() != null ? u.getFirstName() : "")
+                                + (u.getLastName() != null ? " " + u.getLastName() : "").trim()
+                ))
+                .toList();
+        return ResponseEntity.ok(users);
+    }
+
     @GetMapping("/dashboard")
-    public ResponseEntity<DashboardSummaryResponse> getDashboardSummary() {
-        return ResponseEntity.ok(reportService.getDashboardSummary());
+    public ResponseEntity<DashboardSummaryResponse> getDashboardSummary(
+            @RequestParam(required = false) String username) {
+        return ResponseEntity.ok(reportService.getDashboardSummary(username));
     }
 
     @GetMapping("/monthly-sales")
-    public ResponseEntity<List<MonthlySalesTrendResponse>> getMonthlySalesTrend() {
-        return ResponseEntity.ok(reportService.getMonthlySalesTrend());
+    public ResponseEntity<List<MonthlySalesTrendResponse>> getMonthlySalesTrend(
+            @RequestParam(required = false) String username) {
+        return ResponseEntity.ok(reportService.getMonthlySalesTrend(username));
     }
 
     @GetMapping("/lead-source-distribution")

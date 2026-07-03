@@ -38,17 +38,22 @@ public class AccountController {
 
     @GetMapping
     public ResponseEntity<List<Account>> getAll() {
-        if (UserContextHelper.isAdmin()) {
+        String orgId = UserContextHelper.scopedOrgId();
+        String owner = UserContextHelper.scopedOwner();
+        if (orgId == null) {
             return ResponseEntity.ok(accountRepository.findAll());
         }
-        return ResponseEntity.ok(accountRepository.findByOwner(UserContextHelper.currentUsername()));
+        if (owner == null) {
+            return ResponseEntity.ok(accountRepository.findByOrganizationId(orgId));
+        }
+        return ResponseEntity.ok(accountRepository.findByOrganizationIdAndOwner(orgId, owner));
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<Account> getById(@PathVariable Long id) {
         return accountRepository.findById(id)
                 .map(a -> {
-                    UserContextHelper.assertAccess(a.getOwner());
+                    UserContextHelper.assertAccess(a.getOrganizationId(), a.getOwner());
                     return ResponseEntity.ok(a);
                 })
                 .orElse(ResponseEntity.notFound().build());
@@ -59,7 +64,7 @@ public class AccountController {
         if (account.getId() != null) {
             Account existing = accountRepository.findById(account.getId())
                     .orElseThrow(() -> new NoSuchElementException(ACCOUNT_NOT_FOUND));
-            UserContextHelper.assertAccess(existing.getOwner());
+            UserContextHelper.assertAccess(existing.getOrganizationId(), existing.getOwner());
             existing.setCompanyName(account.getCompanyName());
             existing.setIndustry(account.getIndustry());
             existing.setPhone(account.getPhone());
@@ -71,6 +76,7 @@ public class AccountController {
             return ResponseEntity.ok(accountRepository.save(existing));
         }
         account.setOwner(UserContextHelper.currentUsername());
+        account.setOrganizationId(UserContextHelper.currentOrganizationId());
         return ResponseEntity.ok(accountRepository.save(account));
     }
 
@@ -78,7 +84,7 @@ public class AccountController {
     public ResponseEntity<Account> update(@PathVariable Long id, @RequestBody Account account) {
         Account existing = accountRepository.findById(id)
                 .orElseThrow(() -> new NoSuchElementException(ACCOUNT_NOT_FOUND));
-        UserContextHelper.assertAccess(existing.getOwner());
+        UserContextHelper.assertAccess(existing.getOrganizationId(), existing.getOwner());
         existing.setCompanyName(account.getCompanyName());
         existing.setIndustry(account.getIndustry());
         existing.setPhone(account.getPhone());
@@ -94,7 +100,7 @@ public class AccountController {
     public ResponseEntity<Account> deactivate(@PathVariable Long id) {
         Account existing = accountRepository.findById(id)
                 .orElseThrow(() -> new NoSuchElementException(ACCOUNT_NOT_FOUND));
-        UserContextHelper.assertAccess(existing.getOwner());
+        UserContextHelper.assertAccess(existing.getOrganizationId(), existing.getOwner());
         existing.setStatus("Inactive");
         return ResponseEntity.ok(accountRepository.save(existing));
     }
@@ -103,7 +109,7 @@ public class AccountController {
     public ResponseEntity<Map<String, Object>> delete(@PathVariable Long id) {
         Account existing = accountRepository.findById(id)
                 .orElseThrow(() -> new NoSuchElementException(ACCOUNT_NOT_FOUND));
-        UserContextHelper.assertAccess(existing.getOwner());
+        UserContextHelper.assertAccess(existing.getOrganizationId(), existing.getOwner());
         accountRepository.deleteById(id);
         return ResponseEntity.ok(Map.of("success", true, "message", "Account deleted successfully"));
     }

@@ -23,6 +23,17 @@ public class EmailController {
         return ResponseEntity.ok("Mailbox connected successfully");
     }
 
+    @GetMapping("/mailboxes")
+    public ResponseEntity<List<com.orque.crm.email.dto.MailboxResponse>> listMailboxes() {
+        return ResponseEntity.ok(emailService.listMailboxes());
+    }
+
+    @DeleteMapping("/mailboxes/{id}")
+    public ResponseEntity<Void> deleteMailbox(@PathVariable Long id) {
+        emailService.deleteMailbox(id);
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/templates")
     public ResponseEntity<EmailTemplateResponse> createTemplate(
             @RequestBody EmailTemplateRequest request
@@ -99,7 +110,7 @@ public class EmailController {
     }
 
     @GetMapping("/folder/{folderName}")
-    public ResponseEntity<List<EmailMessageResponse>> getEmailsByFolder(
+    public ResponseEntity<com.orque.crm.email.dto.EmailFolderPage> getEmailsByFolder(
             @PathVariable String folderName,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
@@ -134,5 +145,17 @@ public class EmailController {
         return ResponseEntity.status(org.springframework.http.HttpStatus.FOUND)
                 .header(org.springframework.http.HttpHeaders.LOCATION, redirectUrl)
                 .build();
+    }
+
+    @PutMapping("/{id}/read")
+    public ResponseEntity<Void> markRead(@PathVariable Long id, @RequestParam boolean read) {
+        emailService.markEmailRead(id, read);
+        return ResponseEntity.ok().build();
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteEmailPermanently(@PathVariable Long id) {
+        emailService.deleteEmailPermanently(id);
+        return ResponseEntity.noContent().build();
     }
 }

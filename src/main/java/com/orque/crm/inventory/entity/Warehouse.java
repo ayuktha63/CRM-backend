@@ -19,4 +19,6 @@ public class Warehouse {
     private String name;
 
     private String location;
+
+    private String organizationId;
 }

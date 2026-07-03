@@ -7,6 +7,7 @@ public interface AuthService {
 
     ApiResponse register(RegisterRequest request);
     AuthResponse login(LoginRequest request);
+    AuthResponse ssoLogin(String ssoToken);
     UserProfileResponse getCurrentUser();
     AuthResponse refreshToken(RefreshTokenRequest request);
     ApiMessageResponse logout();

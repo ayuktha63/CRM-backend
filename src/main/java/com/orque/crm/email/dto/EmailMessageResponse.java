@@ -48,4 +48,5 @@ public class EmailMessageResponse {
     private String bcc;
     private LocalDateTime scheduledAt;
     private Boolean isDraft;
+    private Boolean isRead;
 }

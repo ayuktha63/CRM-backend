@@ -10,6 +10,7 @@ import com.orque.crm.csv.dto.CsvPreviewResponse;
 import com.orque.crm.csv.entity.CsvImportHistory;
 import com.orque.crm.csv.repository.CsvImportHistoryRepository;
 import com.orque.crm.enums.ContactStatus;
+import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
@@ -23,6 +24,7 @@ import java.util.*;
 import com.orque.crm.audit.service.AuditLogService;
 import com.orque.crm.enums.AuditAction;
 import com.orque.crm.enums.AuditModule;
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CsvImportServiceImpl implements CsvImportService {
@@ -222,6 +224,8 @@ public class CsvImportServiceImpl implements CsvImportService {
                     .failedImports(failedImports)
                     .duplicateRecords(duplicateRecords)
                     .importedAt(LocalDateTime.now())
+                    .organizationId(UserContextHelper.currentOrganizationId())
+                    .importedBy(UserContextHelper.currentUsername())
                     .build();
 
             CsvImportHistory savedHistory = csvImportHistoryRepository.save(history);
@@ -258,6 +262,10 @@ public class CsvImportServiceImpl implements CsvImportService {
 
     @Override
     public List<CsvImportHistory> getImportHistory() {
+        String orgId = UserContextHelper.currentOrganizationId();
+        if (orgId != null) {
+            return csvImportHistoryRepository.findByOrganizationIdOrderByImportedAtDesc(orgId);
+        }
         return csvImportHistoryRepository.findAll();
     }
 

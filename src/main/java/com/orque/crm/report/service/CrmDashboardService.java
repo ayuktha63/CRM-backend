@@ -1,5 +1,6 @@
 package com.orque.crm.report.service;
 
+import com.orque.crm.common.UserContextHelper;
 import com.orque.crm.report.entity.CrmDashboard;
 import com.orque.crm.report.repository.CrmDashboardRepository;
 import lombok.RequiredArgsConstructor;
@@ -15,7 +16,9 @@ public class CrmDashboardService {
     private final CrmDashboardRepository repository;
 
     public List<CrmDashboard> getDashboards() {
-        return repository.findAll();
+        // Return dashboards shared publicly OR created by current user
+        return repository.findByShareTypeIgnoreCaseOrCreatedByIgnoreCase(
+                "PUBLIC", UserContextHelper.currentUsername());
     }
 
     public CrmDashboard getDashboard(Long id) {

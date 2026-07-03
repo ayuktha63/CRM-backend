@@ -16,6 +16,10 @@ public class Account {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+    /** Organization this record belongs to. Populated automatically by the backend. */
+    @Column(length = 36)
+    private String organizationId;
+
 
     @Column(nullable = false)
     private String companyName;

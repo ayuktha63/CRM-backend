@@ -1,5 +1,6 @@
 package com.orque.crm.feature.controller;
 
+import com.orque.crm.common.UserContextHelper;
 import com.orque.crm.feature.entity.Product;
 import com.orque.crm.feature.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
@@ -18,13 +19,18 @@ public class ProductController {
 
     @GetMapping
     public ResponseEntity<List<Product>> getAll() {
-        return ResponseEntity.ok(productRepository.findAll());
+        String orgId = UserContextHelper.scopedOrgId();
+        if (orgId == null) return ResponseEntity.ok(productRepository.findAll());
+        return ResponseEntity.ok(productRepository.findByOrganizationId(orgId));
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<Product> getById(@PathVariable Long id) {
         return productRepository.findById(id)
-                .map(ResponseEntity::ok)
+                .map(p -> {
+                    if (!inScope(p.getOrganizationId())) return ResponseEntity.status(403).<Product>build();
+                    return ResponseEntity.ok(p);
+                })
                 .orElse(ResponseEntity.notFound().build());
     }
 
@@ -33,6 +39,7 @@ public class ProductController {
         if (product.getId() != null) {
             Product existing = productRepository.findById(product.getId())
                     .orElseThrow(() -> new RuntimeException("Product not found"));
+            if (!inScope(existing.getOrganizationId())) return ResponseEntity.status(403).build();
             existing.setName(product.getName());
             existing.setSku(product.getSku());
             existing.setCategory(product.getCategory());
@@ -42,6 +49,7 @@ public class ProductController {
             existing.setStatus(product.getStatus());
             return ResponseEntity.ok(productRepository.save(existing));
         }
+        product.setOrganizationId(UserContextHelper.currentOrganizationId());
         return ResponseEntity.ok(productRepository.save(product));
     }
 
@@ -49,6 +57,7 @@ public class ProductController {
     public ResponseEntity<Product> update(@PathVariable Long id, @RequestBody Product product) {
         Product existing = productRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Product not found"));
+        if (!inScope(existing.getOrganizationId())) return ResponseEntity.status(403).build();
         existing.setName(product.getName());
         existing.setSku(product.getSku());
         existing.setCategory(product.getCategory());
@@ -63,6 +72,7 @@ public class ProductController {
     public ResponseEntity<Product> deactivate(@PathVariable Long id) {
         Product existing = productRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Product not found"));
+        if (!inScope(existing.getOrganizationId())) return ResponseEntity.status(403).build();
         existing.setStatus("Inactive");
         return ResponseEntity.ok(productRepository.save(existing));
     }
@@ -71,13 +81,23 @@ public class ProductController {
     public ResponseEntity<Product> activate(@PathVariable Long id) {
         Product existing = productRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Product not found"));
+        if (!inScope(existing.getOrganizationId())) return ResponseEntity.status(403).build();
         existing.setStatus("Active");
         return ResponseEntity.ok(productRepository.save(existing));
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Map<String, Object>> delete(@PathVariable Long id) {
+        Product existing = productRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Product not found"));
+        if (!inScope(existing.getOrganizationId())) return ResponseEntity.status(403).build();
         productRepository.deleteById(id);
         return ResponseEntity.ok(Map.of("success", true, "message", "Product deleted successfully"));
+    }
+
+    private boolean inScope(String recordOrgId) {
+        return UserContextHelper.isSystemAdmin()
+                || recordOrgId == null
+                || recordOrgId.equals(UserContextHelper.currentOrganizationId());
     }
 }

@@ -7,9 +7,11 @@ import com.orque.crm.lead.repository.LeadRepository;
 import com.orque.crm.pipeline.dto.*;
 import com.orque.crm.pipeline.entity.PipelineStageHistory;
 import com.orque.crm.pipeline.repository.PipelineStageHistoryRepository;
+import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import com.orque.crm.audit.service.AuditLogService;
+import com.orque.crm.common.UserContextHelper;
 import com.orque.crm.enums.AuditAction;
 import com.orque.crm.enums.AuditModule;
 import java.math.BigDecimal;
@@ -18,6 +20,7 @@ import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class PipelineServiceImpl implements PipelineService {
@@ -27,12 +30,20 @@ public class PipelineServiceImpl implements PipelineService {
     private final AuditLogService auditLogService;
     @Override
     public PipelineBoardResponse getKanbanBoard() {
+        String orgId = UserContextHelper.scopedOrgId();
+        String owner = UserContextHelper.scopedOwner();
 
         List<PipelineStageColumnResponse> columns =
                 Arrays.stream(PipelineStage.values())
                         .map(stage -> {
-                            List<Lead> leads =
-                                    leadRepository.findByPipelineStage(stage);
+                            List<Lead> leads = (orgId == null)
+                                    ? leadRepository.findByPipelineStage(stage)
+                                    : leadRepository.findByOrganizationIdAndPipelineStage(orgId, stage);
+                            if (owner != null) {
+                                leads = leads.stream()
+                                        .filter(l -> owner.equals(l.getAssignedOwner()))
+                                        .toList();
+                            }
 
                             BigDecimal totalValue = leads.stream()
                                     .map(Lead::getEstimatedValue)
@@ -118,8 +129,17 @@ public class PipelineServiceImpl implements PipelineService {
 
     @Override
     public PipelineHealthResponse getPipelineHealth() {
+        String orgId = UserContextHelper.scopedOrgId();
+        String owner = UserContextHelper.scopedOwner();
 
-        List<Lead> allLeads = leadRepository.findAll();
+        List<Lead> allLeads;
+        if (orgId == null) {
+            allLeads = leadRepository.findAll();
+        } else if (owner == null) {
+            allLeads = leadRepository.findByOrganizationId(orgId);
+        } else {
+            allLeads = leadRepository.findByOrganizationIdAndAssignedOwner(orgId, owner);
+        }
 
         long totalLeads = allLeads.size();
 

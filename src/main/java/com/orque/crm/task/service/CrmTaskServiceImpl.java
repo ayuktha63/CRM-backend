@@ -7,6 +7,7 @@ import com.orque.crm.task.entity.CrmTask;
 import com.orque.crm.task.entity.TaskNotification;
 import com.orque.crm.task.repository.CrmTaskRepository;
 import com.orque.crm.task.repository.TaskNotificationRepository;
+import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import com.orque.crm.audit.service.AuditLogService;
@@ -15,6 +16,7 @@ import com.orque.crm.enums.AuditModule;
 import java.time.LocalDateTime;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CrmTaskServiceImpl implements CrmTaskService {
@@ -36,6 +38,7 @@ public class CrmTaskServiceImpl implements CrmTaskService {
                 .priority(request.getPriority() != null ? request.getPriority() : TaskPriority.MEDIUM)
                 .status(request.getStatus() != null ? request.getStatus() : TaskStatus.PENDING)
                 .assignedTo(currentUser)
+                .organizationId(UserContextHelper.currentOrganizationId())
                 .relatedType(request.getRelatedType())
                 .relatedName(request.getRelatedName())
                 .dueDate(request.getDueDate())
@@ -45,6 +48,7 @@ public class CrmTaskServiceImpl implements CrmTaskService {
                 .build();
 
         CrmTask savedTask = taskRepository.save(task);
+        log.info("Task saved");
         auditLogService.createAudit(
                 AuditAction.TASK_CREATED,
                 AuditModule.TASK,
@@ -132,10 +136,15 @@ public class CrmTaskServiceImpl implements CrmTaskService {
 
     @Override
     public List<CrmTaskResponse> getAllTasks() {
-        return taskRepository.findAll()
-                .stream()
-                .map(this::mapToResponse)
-                .toList();
+        String orgId = UserContextHelper.scopedOrgId();
+        String owner = UserContextHelper.scopedOwner();
+        if (orgId == null) {
+            return taskRepository.findAll().stream().map(this::mapToResponse).toList();
+        }
+        if (owner == null) {
+            return taskRepository.findByOrganizationId(orgId).stream().map(this::mapToResponse).toList();
+        }
+        return taskRepository.findByOrganizationIdAndAssignedTo(orgId, owner).stream().map(this::mapToResponse).toList();
     }
 
     @Override
@@ -174,8 +183,9 @@ public class CrmTaskServiceImpl implements CrmTaskService {
     @Override
     public List<TaskNotificationResponse> getNotifications() {
 
-        return notificationRepository.findAll()
-                .stream()
+        String username = UserContextHelper.currentUsername();
+        return notificationRepository.findAll().stream()
+                .filter(n -> UserContextHelper.isAdmin() || username.equals(n.getRecipient()))
                 .map(this::mapToNotificationResponse)
                 .toList();
     }

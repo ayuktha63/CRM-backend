@@ -35,16 +35,22 @@ public class QuoteController {
 
     @GetMapping
     public ResponseEntity<List<Quote>> getAll() {
-        return ResponseEntity.ok(quoteRepository.findAll().stream()
-                .filter(q -> UserContextHelper.canAccess(q.getCreatedBy()))
-                .toList());
+        String orgId = UserContextHelper.scopedOrgId();
+        String owner = UserContextHelper.scopedOwner();
+        if (orgId == null) {
+            return ResponseEntity.ok(quoteRepository.findAll());
+        }
+        if (owner == null) {
+            return ResponseEntity.ok(quoteRepository.findByOrganizationId(orgId));
+        }
+        return ResponseEntity.ok(quoteRepository.findByOrganizationIdAndCreatedBy(orgId, owner));
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<Quote> getById(@PathVariable Long id) {
         return quoteRepository.findById(id)
                 .map(q -> {
-                    UserContextHelper.assertAccess(q.getCreatedBy());
+                    UserContextHelper.assertAccess(q.getOrganizationId(), q.getCreatedBy());
                     return ResponseEntity.ok(q);
                 })
                 .orElse(ResponseEntity.notFound().build());
@@ -56,7 +62,7 @@ public class QuoteController {
         if (quote.getId() != null) {
             Quote existing = quoteRepository.findById(quote.getId())
                     .orElseThrow(() -> new NoSuchElementException(QUOTE_NOT_FOUND));
-            UserContextHelper.assertAccess(existing.getCreatedBy());
+            UserContextHelper.assertAccess(existing.getOrganizationId(), existing.getCreatedBy());
             existing.setQuoteNumber(quote.getQuoteNumber());
             existing.setContact(quote.getContact());
             existing.setAccount(quote.getAccount());
@@ -67,6 +73,7 @@ public class QuoteController {
             return ResponseEntity.ok(quoteRepository.save(existing));
         }
         quote.setCreatedBy(currentUsername);
+        quote.setOrganizationId(UserContextHelper.currentOrganizationId());
         if (quote.getStatus() == null) quote.setStatus(STATUS_DRAFT);
         if (quote.getQuoteNumber() == null || quote.getQuoteNumber().isBlank()) {
             quote.setQuoteNumber(userSettingsService.getAndIncrementQuoteNumber());
@@ -78,7 +85,7 @@ public class QuoteController {
     public ResponseEntity<Quote> update(@PathVariable Long id, @RequestBody Quote quote) {
         Quote existing = quoteRepository.findById(id)
                 .orElseThrow(() -> new NoSuchElementException(QUOTE_NOT_FOUND));
-        UserContextHelper.assertAccess(existing.getCreatedBy());
+        UserContextHelper.assertAccess(existing.getOrganizationId(), existing.getCreatedBy());
         existing.setQuoteNumber(quote.getQuoteNumber());
         existing.setContact(quote.getContact());
         existing.setAccount(quote.getAccount());
@@ -142,7 +149,7 @@ public class QuoteController {
     public ResponseEntity<byte[]> downloadPdf(@PathVariable Long id) {
         Quote q = quoteRepository.findById(id)
                 .orElseThrow(() -> new NoSuchElementException(QUOTE_NOT_FOUND));
-        UserContextHelper.assertAccess(q.getCreatedBy());
+        UserContextHelper.assertAccess(q.getOrganizationId(), q.getCreatedBy());
 
         Map<String, String> tokens = Map.ofEntries(
                 Map.entry("quoteNumber", q.getQuoteNumber()),
@@ -170,7 +177,7 @@ public class QuoteController {
     public ResponseEntity<Map<String, Object>> delete(@PathVariable Long id) {
         Quote existing = quoteRepository.findById(id)
                 .orElseThrow(() -> new NoSuchElementException(QUOTE_NOT_FOUND));
-        UserContextHelper.assertAccess(existing.getCreatedBy());
+        UserContextHelper.assertAccess(existing.getOrganizationId(), existing.getCreatedBy());
         quoteRepository.deleteById(id);
         return ResponseEntity.ok(Map.of("success", true, "message", "Quote deleted successfully"));
     }

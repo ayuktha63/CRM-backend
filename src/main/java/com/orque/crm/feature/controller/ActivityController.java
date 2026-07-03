@@ -32,15 +32,15 @@ public class ActivityController {
 
     @GetMapping
     public ResponseEntity<List<Activity>> getAll() {
-        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        List<Activity> activities = activityRepository.findAll();
-        if (principal instanceof User u) {
-            String roleName = u.getRole() != null ? u.getRole().getName().name() : "";
-            if (!"ADMIN".equals(roleName) && !"SALES_ADMIN".equals(roleName)) {
-                return ResponseEntity.ok(activities.stream()
-                        .filter(a -> a.getAssignedTo() == null || a.getAssignedTo().trim().isEmpty() || a.getAssignedTo().equalsIgnoreCase(u.getUsername()))
-                        .toList());
-            }
+        String orgId = com.orque.crm.common.UserContextHelper.scopedOrgId();
+        String owner = com.orque.crm.common.UserContextHelper.scopedOwner();
+        List<Activity> activities;
+        if (orgId == null) {
+            activities = activityRepository.findAll();
+        } else if (owner == null) {
+            activities = activityRepository.findByOrganizationId(orgId);
+        } else {
+            activities = activityRepository.findByOrganizationIdAndAssignedTo(orgId, owner);
         }
         return ResponseEntity.ok(activities);
     }
@@ -49,14 +49,8 @@ public class ActivityController {
     public ResponseEntity<Activity> getById(@PathVariable Long id) {
         return activityRepository.findById(id)
                 .map(a -> {
-                    Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-                    if (principal instanceof User u) {
-                        String roleName = u.getRole() != null ? u.getRole().getName().name() : "";
-                        if (!"ADMIN".equals(roleName) && !"SALES_ADMIN".equals(roleName)) {
-                            if (a.getAssignedTo() != null && !a.getAssignedTo().equalsIgnoreCase(u.getUsername())) {
-                                return ResponseEntity.status(403).<Activity>build();
-                            }
-                        }
+                    if (!UserContextHelper.canAccess(a.getOrganizationId(), a.getAssignedTo())) {
+                        return ResponseEntity.status(403).<Activity>build();
                     }
                     return ResponseEntity.ok(a);
                 })
@@ -68,14 +62,17 @@ public class ActivityController {
             @RequestParam String type,
             @RequestParam Long id) {
         List<Activity> activities = activityRepository.findByRelatedTypeIgnoreCaseAndRelatedId(type, id);
-        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        if (principal instanceof User u) {
-            String roleName = u.getRole() != null ? u.getRole().getName().name() : "";
-            if (!"ADMIN".equals(roleName) && !"SALES_ADMIN".equals(roleName)) {
-                return ResponseEntity.ok(activities.stream()
-                        .filter(a -> a.getAssignedTo() == null || a.getAssignedTo().trim().isEmpty() || a.getAssignedTo().equalsIgnoreCase(u.getUsername()))
-                        .toList());
-            }
+        String orgId = UserContextHelper.scopedOrgId();
+        String owner = UserContextHelper.scopedOwner();
+        if (orgId != null) {
+            activities = activities.stream()
+                    .filter(a -> orgId.equals(a.getOrganizationId()))
+                    .toList();
+        }
+        if (owner != null) {
+            activities = activities.stream()
+                    .filter(a -> a.getAssignedTo() == null || a.getAssignedTo().trim().isEmpty() || a.getAssignedTo().equalsIgnoreCase(owner))
+                    .toList();
         }
         return ResponseEntity.ok(activities);
     }
@@ -105,6 +102,7 @@ public class ActivityController {
             return ResponseEntity.ok(saved);
         }
         activity.setAssignedTo(currentUsername);
+        activity.setOrganizationId(UserContextHelper.currentOrganizationId());
         Activity saved = activityRepository.save(activity);
         logActivityToTimelines(saved, "Activity Logged");
         return ResponseEntity.ok(saved);
@@ -193,6 +191,9 @@ public class ActivityController {
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Map<String, Object>> delete(@PathVariable Long id) {
+        Activity existing = activityRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Activity not found"));
+        UserContextHelper.assertAccess(existing.getOrganizationId(), existing.getAssignedTo());
         activityRepository.deleteById(id);
         return ResponseEntity.ok(Map.of("success", true, "message", "Activity deleted successfully"));
     }

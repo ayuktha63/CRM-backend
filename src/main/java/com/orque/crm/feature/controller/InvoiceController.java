@@ -34,9 +34,15 @@ public class InvoiceController {
 
     @GetMapping
     public ResponseEntity<List<Invoice>> getAll() {
-        return ResponseEntity.ok(invoiceRepository.findAll().stream()
-                .filter(i -> UserContextHelper.canAccess(i.getCreatedBy()))
-                .toList());
+        String orgId = UserContextHelper.scopedOrgId();
+        String owner = UserContextHelper.scopedOwner();
+        if (orgId == null) {
+            return ResponseEntity.ok(invoiceRepository.findAll());
+        }
+        if (owner == null) {
+            return ResponseEntity.ok(invoiceRepository.findByOrganizationId(orgId));
+        }
+        return ResponseEntity.ok(invoiceRepository.findByOrganizationIdAndCreatedBy(orgId, owner));
     }
 
     @GetMapping("/{id}")
@@ -68,6 +74,7 @@ public class InvoiceController {
         }
         if (invoice.getStatus() == null) invoice.setStatus(STATUS_DRAFT);
         invoice.setCreatedBy(currentUsername);
+        invoice.setOrganizationId(UserContextHelper.currentOrganizationId());
         if (invoice.getInvoiceNumber() == null || invoice.getInvoiceNumber().isBlank()) {
             invoice.setInvoiceNumber(userSettingsService.getAndIncrementInvoiceNumber());
         }

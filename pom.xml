@@ -127,6 +127,12 @@
             <artifactId>jakarta.mail</artifactId>
             <version>2.0.1</version>
         </dependency>
+
+        <!-- Spring Mail (JavaMailSenderImpl / testConnection) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
         <!-- Excel export -->
         <dependency>
             <groupId>org.apache.poi</groupId>

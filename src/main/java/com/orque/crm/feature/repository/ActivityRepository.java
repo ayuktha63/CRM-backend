@@ -12,4 +12,6 @@ public interface ActivityRepository extends JpaRepository<Activity, Long> {
     List<Activity> findByRelatedTypeIgnoreCase(String relatedType);
     List<Activity> findByContactIgnoreCase(String contact);
     List<Activity> findByContactContainingIgnoreCase(String contact);
+    List<Activity> findByOrganizationId(String organizationId);
+    List<Activity> findByOrganizationIdAndAssignedTo(String organizationId, String assignedTo);
 }

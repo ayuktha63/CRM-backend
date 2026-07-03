@@ -1,10 +1,12 @@
 
 package com.orque.crm.email.service;
 
+import com.orque.crm.common.UserContextHelper;
 import com.orque.crm.email.dto.*;
 import com.orque.crm.email.entity.*;
 import com.orque.crm.email.repository.*;
 import com.orque.crm.enums.*;
+import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +20,7 @@ import java.util.Map;
 import java.time.LocalDateTime;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class EmailServiceImpl implements EmailService {
@@ -31,16 +34,43 @@ public class EmailServiceImpl implements EmailService {
 
     @Override
     public void connectMailbox(ConnectMailboxRequest request) {
-
+        String owner = UserContextHelper.currentUsername();
         ConnectedMailbox mailbox = ConnectedMailbox.builder()
+                .owner(owner)
                 .emailAddress(request.getEmailAddress())
+                .displayName(request.getEmailAddress())
                 .provider(request.getProvider())
                 .status(MailboxStatus.CONNECTED)
                 .connectedAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
-
         connectedMailboxRepository.save(mailbox);
+    }
+
+    @Override
+    public List<MailboxResponse> listMailboxes() {
+        String owner = UserContextHelper.currentUsername();
+        return connectedMailboxRepository.findAllByOwnerOrderByConnectedAtDesc(owner)
+                .stream()
+                .map(m -> MailboxResponse.builder()
+                        .id(m.getId())
+                        .emailAddress(m.getEmailAddress())
+                        .displayName(m.getDisplayName() != null ? m.getDisplayName() : m.getEmailAddress())
+                        .provider(m.getProvider() != null ? m.getProvider().name() : "SMTP")
+                        .status(m.getStatus() != null ? m.getStatus().name() : "CONNECTED")
+                        .connectedAt(m.getConnectedAt())
+                        .build())
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public void deleteMailbox(Long id) {
+        String owner = UserContextHelper.currentUsername();
+        ConnectedMailbox mailbox = connectedMailboxRepository.findById(id)
+                .filter(m -> owner.equals(m.getOwner()))
+                .orElseThrow(() -> new IllegalArgumentException("Mailbox not found: " + id));
+        connectedMailboxRepository.delete(mailbox);
     }
 
     @Override
@@ -116,7 +146,7 @@ public class EmailServiceImpl implements EmailService {
             try {
                 sendRealEmail(settings, request.getToEmail(), request.getCc(), request.getBcc(), request.getSubject(), request.getBody());
             } catch (Exception e) {
-                System.err.println("SMTP real email send failed: " + e.getMessage());
+                log.error("SMTP real email send failed: {}", e.getMessage(), e);
                 
                 // Save as FAILED first to be safe, then throw exception
                 EmailMessage emailMessage = EmailMessage.builder()
@@ -160,6 +190,7 @@ public class EmailServiceImpl implements EmailService {
                 .scheduledAt(scheduledTime)
                 .sentAt(sentTime)
                 .createdAt(LocalDateTime.now())
+                .owner(username)
                 .build();
 
         EmailMessage savedEmail = emailMessageRepository.save(emailMessage);
@@ -305,6 +336,7 @@ public class EmailServiceImpl implements EmailService {
                 .bcc(emailMessage.getBcc())
                 .scheduledAt(emailMessage.getScheduledAt())
                 .isDraft(emailMessage.getIsDraft())
+                .isRead(emailMessage.getIsRead() != null && emailMessage.getIsRead())
                 .build();
     }
 
@@ -432,7 +464,7 @@ public class EmailServiceImpl implements EmailService {
     }
 
     @Override
-    public List<EmailMessageResponse> getEmailsByFolder(String folderName, int page, int size) {
+    public com.orque.crm.email.dto.EmailFolderPage getEmailsByFolder(String folderName, int page, int size) {
         String username = "system";
         try {
             username = com.orque.crm.common.UserContextHelper.currentUsername();
@@ -441,25 +473,30 @@ public class EmailServiceImpl implements EmailService {
 
         if ("INBOX".equalsIgnoreCase(folderName)) {
             if (settings != null && settings.getMailUsername() != null && settings.getMailPassword() != null) {
-                syncImapInbox(settings, page, size);
+                syncImapInbox(settings, username, page, size);
             }
         }
 
         org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
-        org.springframework.data.domain.Page<EmailMessage> emails;
+        // Always scope to the current user's messages; admins see their own inbox too
+        org.springframework.data.domain.Page<EmailMessage> emailPage =
+                emailMessageRepository.findByFolderAndOwner(folderName.toUpperCase(), username, pageable);
 
-        if (settings != null && settings.getMailUsername() != null && !settings.getMailUsername().isEmpty()) {
-            emails = emailMessageRepository.findByFolderAndUserEmail(folderName.toUpperCase(), settings.getMailUsername(), pageable);
-        } else {
-            emails = emailMessageRepository.findByFolderOrderBySentAtDesc(folderName.toUpperCase(), pageable);
-        }
-
-        return emails.getContent().stream()
+        List<com.orque.crm.email.dto.EmailMessageResponse> content = emailPage.getContent().stream()
                 .map(this::mapEmailToResponse)
                 .toList();
+
+        return com.orque.crm.email.dto.EmailFolderPage.builder()
+                .content(content)
+                .totalElements(emailPage.getTotalElements())
+                .totalPages(emailPage.getTotalPages())
+                .page(page)
+                .size(size)
+                .hasMore(emailPage.hasNext())
+                .build();
     }
 
-    private void syncImapInbox(com.orque.crm.settings.entity.UserSettings settings, int page, int size) {
+    private void syncImapInbox(com.orque.crm.settings.entity.UserSettings settings, String owner, int page, int size) {
         if (settings.getMailUsername() == null || settings.getMailPassword() == null) {
             return;
         }
@@ -527,6 +564,7 @@ public class EmailServiceImpl implements EmailService {
                             .isDraft(false)
                             .sentAt(msg.getSentDate() != null ? new java.sql.Timestamp(msg.getSentDate().getTime()).toLocalDateTime() : LocalDateTime.now())
                             .createdAt(msg.getReceivedDate() != null ? new java.sql.Timestamp(msg.getReceivedDate().getTime()).toLocalDateTime() : LocalDateTime.now())
+                            .owner(owner)
                             .build();
 
                     emailMessageRepository.save(emailMessage);
@@ -536,7 +574,7 @@ public class EmailServiceImpl implements EmailService {
             inbox.close(false);
             store.close();
         } catch (Exception e) {
-            System.err.println("IMAP sync failed: " + e.getMessage());
+            log.error("IMAP sync failed: {}", e.getMessage(), e);
         }
     }
 
@@ -574,5 +612,22 @@ public class EmailServiceImpl implements EmailService {
                 .orElseThrow(() -> new java.util.NoSuchElementException("Email not found"));
         email.setClickCount(email.getClickCount() == null ? 1 : email.getClickCount() + 1);
         emailMessageRepository.save(email);
+    }
+
+    @Override
+    @Transactional
+    public void markEmailRead(Long id, boolean read) {
+        EmailMessage email = emailMessageRepository.findById(id)
+                .orElseThrow(() -> new java.util.NoSuchElementException("Email not found"));
+        email.setIsRead(read);
+        emailMessageRepository.save(email);
+    }
+
+    @Override
+    @Transactional
+    public void deleteEmailPermanently(Long id) {
+        EmailMessage email = emailMessageRepository.findById(id)
+                .orElseThrow(() -> new java.util.NoSuchElementException("Email not found"));
+        emailMessageRepository.delete(email);
     }
 }

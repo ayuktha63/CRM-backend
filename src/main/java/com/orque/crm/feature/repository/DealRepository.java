@@ -11,4 +11,6 @@ public interface DealRepository extends JpaRepository<Deal, Long> {
     List<Deal> findByContactIgnoreCase(String contact);
     List<Deal> findByAccountIgnoreCase(String account);
     List<Deal> findByAssignedTo(String assignedTo);
+    List<Deal> findByOrganizationId(String organizationId);
+    List<Deal> findByOrganizationIdAndAssignedTo(String organizationId, String assignedTo);
 }

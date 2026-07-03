@@ -6,4 +6,5 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
+    java.util.List<SalesOrder> findByOrganizationId(String organizationId);
 }

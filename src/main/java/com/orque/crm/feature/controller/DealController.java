@@ -37,17 +37,22 @@ public class DealController {
 
     @GetMapping
     public ResponseEntity<List<Deal>> getAll() {
-        if (UserContextHelper.isAdmin()) {
+        String orgId = UserContextHelper.scopedOrgId();
+        String owner = UserContextHelper.scopedOwner();
+        if (orgId == null) {
             return ResponseEntity.ok(dealRepository.findAll());
         }
-        return ResponseEntity.ok(dealRepository.findByAssignedTo(UserContextHelper.currentUsername()));
+        if (owner == null) {
+            return ResponseEntity.ok(dealRepository.findByOrganizationId(orgId));
+        }
+        return ResponseEntity.ok(dealRepository.findByOrganizationIdAndAssignedTo(orgId, owner));
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<Deal> getById(@PathVariable Long id) {
         Deal deal = dealRepository.findById(id)
                 .orElseThrow(() -> new NoSuchElementException(DEAL_NOT_FOUND));
-        UserContextHelper.assertAccess(deal.getAssignedTo());
+        UserContextHelper.assertAccess(deal.getOrganizationId(), deal.getAssignedTo());
         return ResponseEntity.ok(deal);
     }
 
@@ -56,11 +61,12 @@ public class DealController {
         if (deal.getId() != null) {
             Deal existing = dealRepository.findById(deal.getId())
                     .orElseThrow(() -> new NoSuchElementException(DEAL_NOT_FOUND));
-            UserContextHelper.assertAccess(existing.getAssignedTo());
+            UserContextHelper.assertAccess(existing.getOrganizationId(), existing.getAssignedTo());
             applyPatch(existing, deal);
             return ResponseEntity.ok(dealRepository.save(existing));
         }
         deal.setAssignedTo(UserContextHelper.currentUsername());
+        deal.setOrganizationId(UserContextHelper.currentOrganizationId());
         return ResponseEntity.ok(dealRepository.save(deal));
     }
 
@@ -68,7 +74,7 @@ public class DealController {
     public ResponseEntity<Deal> update(@PathVariable Long id, @RequestBody Deal deal) {
         Deal existing = dealRepository.findById(id)
                 .orElseThrow(() -> new NoSuchElementException(DEAL_NOT_FOUND));
-        UserContextHelper.assertAccess(existing.getAssignedTo());
+        UserContextHelper.assertAccess(existing.getOrganizationId(), existing.getAssignedTo());
         applyPatch(existing, deal);
         // Preserve original assignedTo — edit does not reassign
         return ResponseEntity.ok(dealRepository.save(existing));
@@ -88,7 +94,7 @@ public class DealController {
     public ResponseEntity<Deal> approve(@PathVariable Long id) {
         Deal existing = dealRepository.findById(id)
                 .orElseThrow(() -> new NoSuchElementException(DEAL_NOT_FOUND));
-        UserContextHelper.assertAccess(existing.getAssignedTo());
+        UserContextHelper.assertAccess(existing.getOrganizationId(), existing.getAssignedTo());
         existing.setStage("Closed Won");
         return ResponseEntity.ok(dealRepository.save(existing));
     }
@@ -97,7 +103,7 @@ public class DealController {
     public ResponseEntity<Deal> reject(@PathVariable Long id) {
         Deal existing = dealRepository.findById(id)
                 .orElseThrow(() -> new NoSuchElementException(DEAL_NOT_FOUND));
-        UserContextHelper.assertAccess(existing.getAssignedTo());
+        UserContextHelper.assertAccess(existing.getOrganizationId(), existing.getAssignedTo());
         existing.setStage("Closed Lost");
         return ResponseEntity.ok(dealRepository.save(existing));
     }
@@ -106,7 +112,7 @@ public class DealController {
     public ResponseEntity<Map<String, Object>> delete(@PathVariable Long id) {
         Deal existing = dealRepository.findById(id)
                 .orElseThrow(() -> new NoSuchElementException(DEAL_NOT_FOUND));
-        UserContextHelper.assertAccess(existing.getAssignedTo());
+        UserContextHelper.assertAccess(existing.getOrganizationId(), existing.getAssignedTo());
         dealRepository.deleteById(id);
         return ResponseEntity.ok(Map.of("success", true, "message", "Deal deleted successfully"));
     }
@@ -143,7 +149,7 @@ public class DealController {
     public ResponseEntity<Quote> createQuoteFromDeal(@PathVariable Long id) {
         Deal deal = dealRepository.findById(id)
                 .orElseThrow(() -> new NoSuchElementException(DEAL_NOT_FOUND));
-        UserContextHelper.assertAccess(deal.getAssignedTo());
+        UserContextHelper.assertAccess(deal.getOrganizationId(), deal.getAssignedTo());
 
         String currentUser = UserContextHelper.currentUsername();
         String quoteNumber = userSettingsService.getAndIncrementQuoteNumber();

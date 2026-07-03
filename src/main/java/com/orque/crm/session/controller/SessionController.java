@@ -1,6 +1,8 @@
 package com.orque.crm.session.controller;
 
 import com.orque.crm.auth.entity.User;
+import com.orque.crm.auth.repository.UserRepository;
+import com.orque.crm.common.UserContextHelper;
 import com.orque.crm.session.dto.SessionResponse;
 import com.orque.crm.session.entity.UserSession;
 import com.orque.crm.session.repository.UserSessionRepository;
@@ -21,13 +23,26 @@ import java.util.Map;
 public class SessionController {
 
     private final UserSessionRepository sessionRepository;
+    private final UserRepository userRepository;
 
     @GetMapping
     public ResponseEntity<List<SessionResponse>> getAllSessions() {
-        // Auto-expire sessions idle for > 8 hours before returning list
         sessionRepository.expireOldSessions(LocalDateTime.now().minusHours(8));
+
+        List<UserSession> sessions;
+        String orgId = UserContextHelper.scopedOrgId();
+        if (orgId == null) {
+            // SYSTEM_ADMIN — all sessions
+            sessions = sessionRepository.findAll();
+        } else {
+            // Scope to usernames belonging to this org
+            List<String> orgUsernames = userRepository.findByOrganizationId(orgId)
+                    .stream().map(User::getUsername).toList();
+            sessions = sessionRepository.findByUsernameIn(orgUsernames);
+        }
+
         return ResponseEntity.ok(
-                sessionRepository.findAll().stream()
+                sessions.stream()
                         .sorted((a, b) -> {
                             LocalDateTime ta = a.getLastActivity() != null ? a.getLastActivity() : LocalDateTime.MIN;
                             LocalDateTime tb = b.getLastActivity() != null ? b.getLastActivity() : LocalDateTime.MIN;
@@ -39,9 +54,12 @@ public class SessionController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<SessionResponse> getById(@PathVariable Long id) {
+    public ResponseEntity<?> getById(@PathVariable Long id) {
         UserSession session = sessionRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Session not found: " + id));
+        if (!sessionInScope(session)) {
+            return ResponseEntity.status(403).build();
+        }
         return ResponseEntity.ok(toResponse(session));
     }
 
@@ -65,6 +83,9 @@ public class SessionController {
     public ResponseEntity<Map<String, Object>> terminateSession(@PathVariable Long id) {
         UserSession session = sessionRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Session not found: " + id));
+        if (!sessionInScope(session)) {
+            return ResponseEntity.status(403).body(Map.of("message", "Access denied."));
+        }
         sessionRepository.delete(session);
         return ResponseEntity.ok(Map.of("success", true, "message", "Session terminated."));
     }
@@ -75,6 +96,7 @@ public class SessionController {
         List<UserSession> active = sessionRepository.findByStatus("ACTIVE");
         List<UserSession> toDelete = active.stream()
                 .filter(s -> !s.getJwtId().equals(currentJwt))
+                .filter(this::sessionInScope)
                 .toList();
         sessionRepository.deleteAll(toDelete);
         return ResponseEntity.ok(Map.of("success", true, "message",
@@ -87,6 +109,15 @@ public class SessionController {
             if (principal instanceof User u) return u.getUsername();
         } catch (Exception ignored) { /* no active session */ }
         return "";
+    }
+
+    /** True if the session belongs to the caller's org (or caller is SYSTEM_ADMIN). */
+    private boolean sessionInScope(UserSession session) {
+        String orgId = UserContextHelper.scopedOrgId();
+        if (orgId == null) return true;
+        List<String> orgUsernames = userRepository.findByOrganizationId(orgId)
+                .stream().map(User::getUsername).toList();
+        return orgUsernames.contains(session.getUsername());
     }
 
     private SessionResponse toResponse(UserSession s) {

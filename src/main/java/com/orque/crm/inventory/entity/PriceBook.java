@@ -24,6 +24,8 @@ public class PriceBook {
     @Column(nullable = false)
     private Boolean active;
 
+    private String organizationId;
+
     private LocalDateTime createdAt;
 
     @PrePersist

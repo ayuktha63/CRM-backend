@@ -6,4 +6,5 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface WarehouseRepository extends JpaRepository<Warehouse, Long> {
+    java.util.List<Warehouse> findByOrganizationId(String organizationId);
 }
