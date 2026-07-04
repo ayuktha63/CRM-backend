@@ -253,6 +253,12 @@ public class LeadServiceImpl implements LeadService {
             throw new RuntimeException("Only QUALIFIED leads can be converted. Please qualify the lead first.");
         }
 
+        // Every list endpoint for these resources scopes by organizationId (see
+        // AccountController/DealController/ContactServiceImpl#getAll*) — without stamping
+        // it here, these records save fine but become invisible to the user who just
+        // converted the lead, making it look like "nothing happened".
+        String orgId = com.orque.crm.common.UserContextHelper.currentOrganizationId();
+
         // 1. Create or reuse Contact (case-insensitive email match)
         Contact contact = contactRepository.findByEmailIgnoreCase(lead.getEmail())
                 .orElseGet(() -> contactRepository.save(
@@ -271,6 +277,7 @@ public class LeadServiceImpl implements LeadService {
                                 .tags(lead.getTags())
                                 .status(ContactStatus.NEW)
                                 .owner(lead.getAssignedOwner())
+                                .organizationId(orgId)
                                 .createdAt(LocalDateTime.now())
                                 .updatedAt(LocalDateTime.now())
                                 .build()
@@ -288,6 +295,7 @@ public class LeadServiceImpl implements LeadService {
                                         .country(lead.getCountry())
                                         .status("Active")
                                         .owner(lead.getAssignedOwner())
+                                        .organizationId(orgId)
                                         .build()
                         ))
                 : null;
@@ -298,10 +306,11 @@ public class LeadServiceImpl implements LeadService {
                         .dealName(lead.getFullName() + " — Deal")
                         .account(account != null ? account.getCompanyName() : "")
                         .contact(lead.getFullName())
-                        .amount(lead.getEstimatedValue())
+                        .amount(lead.getEstimatedValue() != null ? lead.getEstimatedValue() : java.math.BigDecimal.ZERO)
                         .stage("Prospecting")
                         .expectedCloseDate(lead.getExpectedCloseDate())
                         .assignedTo(lead.getAssignedOwner())
+                        .organizationId(orgId)
                         .build()
         );
 
