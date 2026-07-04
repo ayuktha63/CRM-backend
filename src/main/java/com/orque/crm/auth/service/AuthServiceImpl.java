@@ -28,6 +28,7 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -99,6 +100,13 @@ public class AuthServiceImpl implements AuthService {
         java.util.List<String> features = opacResp.get("features") instanceof java.util.List
                 ? (java.util.List<String>) opacResp.get("features") : new java.util.ArrayList<>();
 
+        // For non-ORQUE tenants, find or create the CRM org for this tenant up front, same
+        // as SSO login — this was previously only done on the SSO path, so users who logged
+        // in directly with a CRM username/password stayed orphaned from their tenant's org
+        // (null organizationId), silently losing every org/license-gated feature.
+        User existingUser = userRepository.findByUsername(username).orElse(null);
+        String tenantOrgId = resolveOrgId(tenantName, existingUser != null ? existingUser.getOrganizationId() : null);
+
         // Find or auto-provision CRM user by username only (never fall back to email)
         RoleType crmRoleType = "SYSTEM_ADMIN".equals(opacRole) ? RoleType.SYSTEM_ADMIN : RoleType.SALES_USER;
         final RoleType finalRole = crmRoleType;
@@ -115,11 +123,18 @@ public class AuthServiceImpl implements AuthService {
                 .password(passwordEncoder.encode(java.util.UUID.randomUUID().toString()))
                 .enabled(true)
                 .role(role)
+                .organizationId(tenantOrgId)
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
             return userRepository.save(newUser);
         });
+
+        // Keep an existing user's org in sync — covers users who previously landed in a
+        // stale/DEFAULT org before their tenant's org existed.
+        if (tenantOrgId != null && !tenantOrgId.equals(user.getOrganizationId())) {
+            user.setOrganizationId(tenantOrgId);
+        }
 
         if (Boolean.FALSE.equals(user.getEnabled())) {
             throw new RuntimeException("User account is disabled. Contact your administrator.");
@@ -243,6 +258,74 @@ public class AuthServiceImpl implements AuthService {
                 .build();
     }
 
+    /**
+     * Finds or creates the CRM Organization for an OPAC tenant, and returns its id — or
+     * null for the ORQUE platform owner, who is a true system admin with no org. Reused
+     * by both direct login and SSO login so a tenant's org assignment is always kept
+     * correct regardless of which path a user authenticates through.
+     */
+    private String resolveOrgId(String tenantName, String existingOrgId) {
+        boolean isPlatformOwner = tenantName == null || tenantName.isBlank() || "ORQUE".equalsIgnoreCase(tenantName);
+        if (isPlatformOwner) return null;
+        String orgCode = tenantName.toUpperCase();
+        Organization tenantOrg = organizationRepository.findByOrganizationCode(orgCode).orElseGet(() -> {
+            // No org with this code yet — if the user already belongs to an org (e.g. a
+            // stale DEFAULT org from before the tenant org existed), rename it in place
+            // rather than creating a duplicate.
+            if (existingOrgId != null) {
+                Organization existingOrg = organizationRepository.findById(existingOrgId).orElse(null);
+                if (existingOrg != null) {
+                    existingOrg.setOrganizationCode(orgCode);
+                    existingOrg.setOrganizationName(tenantName);
+                    return organizationRepository.save(existingOrg);
+                }
+            }
+            Organization newOrg = Organization.builder()
+                    .organizationCode(orgCode)
+                    .organizationName(tenantName)
+                    .status(OrganizationStatus.ACTIVE)
+                    .build();
+            return organizationRepository.save(newOrg);
+        });
+        return tenantOrg.getId();
+    }
+
+    @Override
+    public Map<String, Object> syncUserFromOpac(Map<String, String> body) {
+        String username = body.get("username");
+        if (username == null || username.isBlank()) {
+            return Map.of("message", "username required", "error", true);
+        }
+        if (userRepository.existsByUsername(username)) {
+            return Map.of("message", "User already exists", "skipped", true);
+        }
+        String opacRole = body.getOrDefault("role", "SALES_USER");
+        RoleType roleType = "SYSTEM_ADMIN".equals(opacRole) ? RoleType.SYSTEM_ADMIN : RoleType.SALES_USER;
+        Role role = roleRepository.findByName(roleType)
+                .orElseGet(() -> roleRepository.findByName(RoleType.SALES_USER)
+                        .orElseThrow(() -> new RuntimeException("Default role not found")));
+        String email = body.getOrDefault("email", "");
+        String uniqueEmail = userRepository.existsByEmail(email) ? username + "+" + email : email;
+        String tenantName = body.getOrDefault("tenantName", "");
+        String tenantOrgId = resolveOrgId(tenantName, null);
+        User newUser = User.builder()
+                .firstName(body.getOrDefault("firstName", username))
+                .lastName(body.getOrDefault("lastName", "-"))
+                .username(username)
+                .email(uniqueEmail)
+                .phone(body.get("phone"))
+                .password(passwordEncoder.encode(body.getOrDefault("password", java.util.UUID.randomUUID().toString())))
+                .role(role)
+                .organizationId(tenantOrgId)
+                .status("ACTIVE")
+                .enabled(true)
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .build();
+        userRepository.save(newUser);
+        return Map.of("message", "User synced", "username", username);
+    }
+
     @Override
     public AuthResponse ssoLogin(String ssoToken) {
         // Validate token with OPAC backend
@@ -275,34 +358,8 @@ public class AuthServiceImpl implements AuthService {
 
             // For non-ORQUE tenants, find or create a CRM org for this tenant.
             // Platform owner (ORQUE) has no org — they are true system admins.
-            final boolean isPlatformOwner = "ORQUE".equalsIgnoreCase(tenantName) || tenantName.isBlank();
-            final String tenantOrgId;
-            if (!isPlatformOwner) {
-                String orgCode = tenantName.toUpperCase();
-                Organization tenantOrg = organizationRepository.findByOrganizationCode(orgCode).orElseGet(() -> {
-                    // No org with this code yet — check if the user already belongs to an org
-                    // (e.g. stale "DEFAULT" org) and update its code in place rather than
-                    // creating a duplicate.
-                    User existingUser = userRepository.findByUsername(username).orElse(null);
-                    if (existingUser != null && existingUser.getOrganizationId() != null) {
-                        Organization existingOrg = organizationRepository.findById(existingUser.getOrganizationId()).orElse(null);
-                        if (existingOrg != null) {
-                            existingOrg.setOrganizationCode(orgCode);
-                            existingOrg.setOrganizationName(tenantName);
-                            return organizationRepository.save(existingOrg);
-                        }
-                    }
-                    Organization newOrg = Organization.builder()
-                            .organizationCode(orgCode)
-                            .organizationName(tenantName)
-                            .status(OrganizationStatus.ACTIVE)
-                            .build();
-                    return organizationRepository.save(newOrg);
-                });
-                tenantOrgId = tenantOrg.getId();
-            } else {
-                tenantOrgId = null;
-            }
+            User existingUser = userRepository.findByUsername(username).orElse(null);
+            String tenantOrgId = resolveOrgId(tenantName, existingUser != null ? existingUser.getOrganizationId() : null);
 
             // Find or auto-create the CRM user by OPAC username only (never fall back to email
             // — two OPAC users can share an email and must remain separate CRM accounts)
