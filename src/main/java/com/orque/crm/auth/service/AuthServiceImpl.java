@@ -130,9 +130,11 @@ public class AuthServiceImpl implements AuthService {
             return userRepository.save(newUser);
         });
 
-        // Keep an existing user's org in sync — covers users who previously landed in a
-        // stale/DEFAULT org before their tenant's org existed.
-        if (tenantOrgId != null && !tenantOrgId.equals(user.getOrganizationId())) {
+        // Only fill in a MISSING org — never overwrite one a user already has. Their
+        // license (and all CRM data) is bound to that exact organizationId, so silently
+        // reassigning it here (e.g. because of a resolution quirk) would strand them on
+        // an org with no license, which is exactly the bug this once caused.
+        if (tenantOrgId != null && (user.getOrganizationId() == null || user.getOrganizationId().isBlank())) {
             user.setOrganizationId(tenantOrgId);
         }
 
@@ -268,7 +270,11 @@ public class AuthServiceImpl implements AuthService {
         boolean isPlatformOwner = tenantName == null || tenantName.isBlank() || "ORQUE".equalsIgnoreCase(tenantName);
         if (isPlatformOwner) return null;
         String orgCode = tenantName.toUpperCase();
-        Organization tenantOrg = organizationRepository.findByOrganizationCode(orgCode).orElseGet(() -> {
+        // Case-insensitive: a code stored with different casing (e.g. before this
+        // normalization existed) must still resolve to the SAME org, never a duplicate —
+        // a duplicate here would silently move a user off the org their license/CRM data
+        // actually lives on.
+        Organization tenantOrg = organizationRepository.findByOrganizationCodeIgnoreCase(orgCode).orElseGet(() -> {
             // No org with this code yet — if the user already belongs to an org (e.g. a
             // stale DEFAULT org from before the tenant org existed), rename it in place
             // rather than creating a duplicate.
@@ -387,9 +393,9 @@ public class AuthServiceImpl implements AuthService {
                 return userRepository.save(newUser);
             });
 
-            // Always keep org in sync with the OPAC tenant — a user could previously
-            // have landed in DEFAULT org before the tenant org was set up correctly.
-            if (tenantOrgId != null && !tenantOrgId.equals(user.getOrganizationId())) {
+            // Only fill in a MISSING org — never overwrite one a user already has (see
+            // login() for why: their license is bound to that exact organizationId).
+            if (tenantOrgId != null && (user.getOrganizationId() == null || user.getOrganizationId().isBlank())) {
                 user.setOrganizationId(tenantOrgId);
             }
 

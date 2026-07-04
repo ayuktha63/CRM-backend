@@ -11,6 +11,10 @@ public interface OrganizationRepository extends JpaRepository<Organization, Stri
 
     Optional<Organization> findByOrganizationCode(String organizationCode);
 
+    /** Case-insensitive lookup — organization_code should be treated as a stable key
+     *  regardless of how it was cased when the org row was first created. */
+    Optional<Organization> findByOrganizationCodeIgnoreCase(String organizationCode);
+
     boolean existsByOrganizationCode(String organizationCode);
 
     List<Organization> findAllByStatus(OrganizationStatus status);
