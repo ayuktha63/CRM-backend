@@ -15,6 +15,7 @@ public class DataInitializer implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
+        seedRole(RoleType.SYSTEM_ADMIN);
         seedRole(RoleType.ADMIN);
         seedRole(RoleType.SALES_USER);
         seedRole(RoleType.SALES_ADMIN);
