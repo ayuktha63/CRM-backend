@@ -38,9 +38,20 @@ public class JwtAuthenticationFilter
         final String authHeader =
                 request.getHeader("Authorization");
 
-        if (authHeader == null ||
-                !authHeader.startsWith("Bearer ")) {
+        // The browser's EventSource API (used for the notification SSE stream) can't
+        // set custom headers, so it passes the JWT as a query param instead. Only
+        // accepted on that one path — every other endpoint still requires the header.
+        String jwt = null;
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            jwt = authHeader.substring(7).trim();
+        } else if ("/api/v1/notifications/stream".equals(request.getServletPath())) {
+            String tokenParam = request.getParameter("token");
+            if (tokenParam != null && !tokenParam.isBlank()) {
+                jwt = tokenParam.trim();
+            }
+        }
 
+        if (jwt == null) {
             filterChain.doFilter(
                     request,
                     response
@@ -48,8 +59,6 @@ public class JwtAuthenticationFilter
 
             return;
         }
-
-        String jwt = authHeader.substring(7).trim();
 
         String username = null;
         try {

@@ -2,6 +2,7 @@ package com.orque.crm.notification.service;
 
 import com.orque.crm.notification.entity.Notification;
 import com.orque.crm.notification.repository.NotificationRepository;
+import com.orque.crm.notification.sse.NotificationSseRegistry;
 import com.orque.crm.common.UserContextHelper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -14,6 +15,7 @@ import java.util.NoSuchElementException;
 public class NotificationService {
 
     private final NotificationRepository repository;
+    private final NotificationSseRegistry sseRegistry;
 
     public List<Notification> getMyNotifications() {
         String username = UserContextHelper.currentUsername();
@@ -34,7 +36,9 @@ public class NotificationService {
                 .link(link)
                 .isRead(false)
                 .build();
-        return repository.save(notification);
+        Notification saved = repository.save(notification);
+        sseRegistry.notifyUser(recipient);
+        return saved;
     }
 
     @Transactional
@@ -53,5 +57,10 @@ public class NotificationService {
             n.setIsRead(true);
         }
         repository.saveAll(unread);
+    }
+
+    public org.springframework.web.servlet.mvc.method.annotation.SseEmitter openStream() {
+        String username = UserContextHelper.currentUsername();
+        return sseRegistry.register(username);
     }
 }
