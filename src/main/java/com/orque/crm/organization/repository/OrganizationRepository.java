@@ -14,4 +14,6 @@ public interface OrganizationRepository extends JpaRepository<Organization, Stri
     boolean existsByOrganizationCode(String organizationCode);
 
     List<Organization> findAllByStatus(OrganizationStatus status);
+
+    Optional<Organization> findFirstByOrderByCreatedAtAsc();
 }

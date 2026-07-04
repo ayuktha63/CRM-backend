@@ -35,8 +35,16 @@ public class DataInitializationService implements ApplicationRunner {
         assignOrphanUsersToDefaultOrg(defaultOrg.getId());
     }
 
+    /**
+     * Finds any existing org to fall back orphan users onto, creating a DEFAULT one
+     * only if the table is genuinely empty. Looking this up by organizationCode
+     * ("DEFAULT") instead would recreate a duplicate fallback org every restart
+     * once the original DEFAULT row gets renamed (e.g. to match the OPAC platform
+     * tenant) — same bug class as the CRM_LICENSE_SECRET / SYSTEM_ADMIN seeding
+     * gaps found elsewhere in this codebase.
+     */
     private Organization ensureDefaultOrganization() {
-        return organizationRepository.findByOrganizationCode(DEFAULT_ORG_CODE)
+        return organizationRepository.findFirstByOrderByCreatedAtAsc()
                 .orElseGet(() -> {
                     Organization org = new Organization();
                     org.setOrganizationCode(DEFAULT_ORG_CODE);
