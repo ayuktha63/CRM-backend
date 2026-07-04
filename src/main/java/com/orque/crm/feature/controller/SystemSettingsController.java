@@ -45,7 +45,7 @@ public class SystemSettingsController {
 
             return ResponseEntity.ok(Map.of(
                     "productName", "CRM",
-                    "tenantName", payload.getTenant() != null ? payload.getTenant().getCompany() : "",
+                    "tenantName", payload.getTenant() != null ? payload.getTenant().getCompanyName() : "",
                     "startDate", crmProduct.getStartDate(),
                     "endDate", crmProduct.getEndDate(),
                     "gracePeriodDays", crmProduct.getGracePeriod(),

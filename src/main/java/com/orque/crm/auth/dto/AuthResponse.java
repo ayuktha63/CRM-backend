@@ -33,4 +33,7 @@ public class AuthResponse {
 
     /** Tenant name from OPAC. Displayed in the topbar so users know which tenant they are operating in. */
     private String tenantName;
+
+    /** CRM organization ID (UUID string). Sent so the frontend can include it in API payloads for explicit tenant filtering. */
+    private String organizationId;
 }
