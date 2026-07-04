@@ -29,6 +29,8 @@ public class CampaignAsyncService {
         int sentCount = 0;
         int failedCount = 0;
 
+        List<CampaignEmailHistory> historiesToSave = new java.util.ArrayList<>();
+
         for (CampaignRecipient recipient : recipients) {
 
             try {
@@ -46,8 +48,6 @@ public class CampaignAsyncService {
                 recipient.setStatus(CampaignRecipientStatus.SENT);
                 recipient.setSentAt(LocalDateTime.now());
 
-                campaignRecipientRepository.save(recipient);
-
                 CampaignEmailHistory history =
                         CampaignEmailHistory.builder()
                                 .campaignId(campaign.getId())
@@ -60,7 +60,7 @@ public class CampaignAsyncService {
                                 .sentAt(LocalDateTime.now())
                                 .build();
 
-                campaignEmailHistoryRepository.save(history);
+                historiesToSave.add(history);
 
                 sentCount++;
 
@@ -69,10 +69,15 @@ public class CampaignAsyncService {
                 recipient.setStatus(CampaignRecipientStatus.FAILED);
                 recipient.setErrorMessage(e.getMessage());
 
-                campaignRecipientRepository.save(recipient);
-
                 failedCount++;
             }
+        }
+
+        // Persist all recipient status changes and email history rows in two batched
+        // calls instead of one save() per recipient inside the loop above.
+        campaignRecipientRepository.saveAll(recipients);
+        if (!historiesToSave.isEmpty()) {
+            campaignEmailHistoryRepository.saveAll(historiesToSave);
         }
 
         CampaignMetrics metrics =
