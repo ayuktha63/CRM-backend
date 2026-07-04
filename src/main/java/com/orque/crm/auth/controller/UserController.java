@@ -185,16 +185,23 @@ public class UserController {
     }
 
     // ── Sales users list (for reassignment) ──────────────────────────────
+    // SALES_USER is the actual role every tenant's business user gets synced in with
+    // from OPAC — SALES/SALES_ADMIN are legacy/unused roles that no real tenant user
+    // has, so querying only those left this list (and Bulk Assign) empty in practice.
     @GetMapping("/sales")
     public ResponseEntity<List<UserResponse>> getSalesUsers() {
         String orgId = UserContextHelper.scopedOrgId();
+        java.util.stream.Stream<UserResponse> salesUsers = userRepository.findByRoleName(RoleType.SALES_USER).stream()
+                .filter(u -> orgId == null || orgId.equals(u.getOrganizationId()))
+                .map(this::toResponse);
         java.util.stream.Stream<UserResponse> sales = userRepository.findByRoleName(RoleType.SALES).stream()
                 .filter(u -> orgId == null || orgId.equals(u.getOrganizationId()))
                 .map(this::toResponse);
         java.util.stream.Stream<UserResponse> admins = userRepository.findByRoleName(RoleType.SALES_ADMIN).stream()
                 .filter(u -> orgId == null || orgId.equals(u.getOrganizationId()))
                 .map(this::toResponse);
-        return ResponseEntity.ok(java.util.stream.Stream.concat(admins, sales).toList());
+        return ResponseEntity.ok(
+                java.util.stream.Stream.concat(admins, java.util.stream.Stream.concat(sales, salesUsers)).toList());
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────

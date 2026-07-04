@@ -68,7 +68,15 @@ public class BulkController {
             @RequestParam String module,
             @RequestParam String owner,
             @RequestBody List<Long> ids) {
-        
+
+        // Reassigning another user's records is a tenant-admin action — the UI already
+        // hides this button for non-admins, but the endpoint itself must not trust that.
+        if (!UserContextHelper.isSystemAdmin()) {
+            return ResponseEntity.status(403).body(Map.of(
+                    "success", false,
+                    "message", "Only the tenant's system admin can bulk-assign records."));
+        }
+
         switch (module.toLowerCase()) {
             case "leads" -> {
                 List<Lead> items = ownedOnly(leadRepository.findAllById(ids), Lead::getOrganizationId);
@@ -177,7 +185,7 @@ public class BulkController {
     private void setLeadField(Lead lead, String field, String val) {
         switch (field.toLowerCase()) {
             case "industry" -> lead.setIndustry(val);
-            case "city" -> lead.setState(val);
+            case "city" -> lead.setCity(val);
             case "country" -> lead.setCountry(val);
             case "address" -> lead.setAddress(val);
             case "jobtitle" -> lead.setJobTitle(val);
