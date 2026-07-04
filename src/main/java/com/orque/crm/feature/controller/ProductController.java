@@ -68,7 +68,9 @@ public class ProductController {
         return ResponseEntity.ok(productRepository.save(existing));
     }
 
-    @PostMapping("/deactivate/{id}")
+    // Path is {id}/deactivate (not deactivate/{id}) to match the frontend's generic
+    // `${base}/${uuid}/${action}` convention — the previous ordering 404'd every call.
+    @PostMapping("/{id}/deactivate")
     public ResponseEntity<Product> deactivate(@PathVariable Long id) {
         Product existing = productRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Product not found"));
@@ -77,7 +79,7 @@ public class ProductController {
         return ResponseEntity.ok(productRepository.save(existing));
     }
 
-    @PostMapping("/activate/{id}")
+    @PostMapping("/{id}/activate")
     public ResponseEntity<Product> activate(@PathVariable Long id) {
         Product existing = productRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Product not found"));

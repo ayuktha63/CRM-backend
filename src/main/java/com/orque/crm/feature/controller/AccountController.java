@@ -96,12 +96,24 @@ public class AccountController {
         return ResponseEntity.ok(accountRepository.save(existing));
     }
 
-    @PostMapping("/deactivate/{id}")
+    // Path is {id}/deactivate (not deactivate/{id}) to match the frontend's generic
+    // `${base}/${uuid}/${action}` bulk-action call convention used for activate/deactivate
+    // across the app — the previous ordering here caused every deactivate click to 404.
+    @PostMapping("/{id}/deactivate")
     public ResponseEntity<Account> deactivate(@PathVariable Long id) {
         Account existing = accountRepository.findById(id)
                 .orElseThrow(() -> new NoSuchElementException(ACCOUNT_NOT_FOUND));
         UserContextHelper.assertAccess(existing.getOrganizationId(), existing.getOwner());
         existing.setStatus("Inactive");
+        return ResponseEntity.ok(accountRepository.save(existing));
+    }
+
+    @PostMapping("/{id}/activate")
+    public ResponseEntity<Account> activate(@PathVariable Long id) {
+        Account existing = accountRepository.findById(id)
+                .orElseThrow(() -> new NoSuchElementException(ACCOUNT_NOT_FOUND));
+        UserContextHelper.assertAccess(existing.getOrganizationId(), existing.getOwner());
+        existing.setStatus("Active");
         return ResponseEntity.ok(accountRepository.save(existing));
     }
 
