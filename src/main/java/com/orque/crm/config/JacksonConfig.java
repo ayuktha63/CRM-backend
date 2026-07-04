@@ -2,6 +2,7 @@ package com.orque.crm.config;
 
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.DeserializationContext;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
@@ -81,6 +82,10 @@ public class JacksonConfig {
         mapper.registerModule(javaTimeModule);
         mapper.registerModule(module);
         mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        // The frontend's generic form-drawer is shared across every resource and can carry
+        // incidental fields (e.g. license-only bookkeeping) that a given DTO doesn't declare.
+        // A stray extra field should be ignored, not hard-fail the whole save.
+        mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
         return mapper;
     }
