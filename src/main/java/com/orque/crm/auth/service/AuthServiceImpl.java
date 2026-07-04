@@ -45,6 +45,7 @@ public class AuthServiceImpl implements AuthService {
     private final UserSessionRepository sessionRepository;
     private final OrganizationRepository organizationRepository;
     private final LicenseService licenseService;
+    private final org.springframework.web.client.RestTemplate restTemplate;
 
     @Override
     public ApiResponse register(RegisterRequest request) {
@@ -182,7 +183,7 @@ public class AuthServiceImpl implements AuthService {
     @SuppressWarnings("unchecked")
     private java.util.Map<String, Object> validateWithOpac(String usernameOrEmail, String password) {
         try {
-            org.springframework.web.client.RestTemplate rt = new org.springframework.web.client.RestTemplate();
+            org.springframework.web.client.RestTemplate rt = restTemplate;
             java.util.Map<String, String> req = java.util.Map.of(
                 "username", usernameOrEmail, "password", password);
             org.springframework.http.ResponseEntity<java.util.Map> resp = rt.postForEntity(
@@ -246,7 +247,7 @@ public class AuthServiceImpl implements AuthService {
     public AuthResponse ssoLogin(String ssoToken) {
         // Validate token with OPAC backend
         try {
-            org.springframework.web.client.RestTemplate rt = new org.springframework.web.client.RestTemplate();
+            org.springframework.web.client.RestTemplate rt = restTemplate;
             java.util.Map<String, String> req = java.util.Map.of("token", ssoToken);
             org.springframework.http.ResponseEntity<java.util.Map> resp = rt.postForEntity(
                 opacBaseUrl + "/api/sso/validate", req, java.util.Map.class);

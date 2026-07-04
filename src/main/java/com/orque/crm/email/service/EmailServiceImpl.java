@@ -31,6 +31,7 @@ public class EmailServiceImpl implements EmailService {
     private final CommunicationHistoryRepository communicationHistoryRepository;
     private final AuditLogService auditLogService;
     private final com.orque.crm.settings.repository.UserSettingsRepository userSettingsRepository;
+    private final RestTemplate restTemplate;
 
     @Override
     public void connectMailbox(ConnectMailboxRequest request) {
@@ -356,8 +357,6 @@ public class EmailServiceImpl implements EmailService {
 
         ConnectedMailbox mailbox = connectedMailboxRepository.findById(mailboxId)
                 .orElseThrow(() -> new RuntimeException("Mailbox not found"));
-
-        RestTemplate restTemplate = new RestTemplate();
 
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(mailbox.getAccessToken());

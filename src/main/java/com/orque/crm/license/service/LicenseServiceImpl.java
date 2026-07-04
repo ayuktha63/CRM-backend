@@ -15,7 +15,6 @@ import com.orque.crm.auth.repository.UserRepository;
 import com.orque.crm.session.repository.UserSessionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,14 +30,12 @@ import java.util.NoSuchElementException;
 @RequiredArgsConstructor
 public class LicenseServiceImpl implements LicenseService {
 
-    @Value("${opac.base-url}")
-    private String opacBaseUrl;
-
     private final CrmLicenseRepository licenseRepository;
     private final OrganizationRepository orgRepository;
     private final UserRepository userRepository;
     private final UserSessionRepository sessionRepository;
     private final LicenseEncryptionUtil encryptionUtil;
+    private final OpacLicenseCacheService opacLicenseCacheService;
 
     @Override
     @Transactional
@@ -158,7 +155,7 @@ public class LicenseServiceImpl implements LicenseService {
         if (license == null && !"SYSTEM".equalsIgnoreCase(organizationId)) {
             Organization org = orgRepository.findById(organizationId).orElse(null);
             if (org != null) {
-                LicenseStatusResponse opacStatus = checkOpacMasterLicense(org.getOrganizationCode(), organizationId, org.getOrganizationName());
+                LicenseStatusResponse opacStatus = opacLicenseCacheService.checkOpacMasterLicense(org.getOrganizationCode(), organizationId, org.getOrganizationName());
                 if (opacStatus != null) return opacStatus;
             }
             return LicenseStatusResponse.builder()
@@ -184,50 +181,6 @@ public class LicenseServiceImpl implements LicenseService {
         return buildStatusResponse(license, orgName);
     }
 
-    @SuppressWarnings("unchecked")
-    private LicenseStatusResponse checkOpacMasterLicense(String orgCode, String organizationId, String orgName) {
-        try {
-            org.springframework.web.client.RestTemplate rt = new org.springframework.web.client.RestTemplate();
-            org.springframework.http.ResponseEntity<Map> resp = rt.getForEntity(
-                    opacBaseUrl + "/api/internal/crm-license/" + orgCode, Map.class);
-            Map<String, Object> body = resp.getBody();
-            if (body == null || !Boolean.TRUE.equals(body.get("active"))) return null;
-
-            boolean inGrace = Boolean.TRUE.equals(body.get("inGrace"));
-            int daysRemaining = body.get("daysRemaining") instanceof Number ? ((Number) body.get("daysRemaining")).intValue() : 0;
-            int graceRemaining = body.get("graceRemaining") instanceof Number ? ((Number) body.get("graceRemaining")).intValue() : 0;
-            int userLimit = body.get("userLimit") instanceof Number ? ((Number) body.get("userLimit")).intValue() : 0;
-            int concurrentLimit = body.get("concurrentLimit") instanceof Number ? ((Number) body.get("concurrentLimit")).intValue() : 0;
-            int gracePeriod = body.get("gracePeriod") instanceof Number ? ((Number) body.get("gracePeriod")).intValue() : 30;
-            String expiry = body.getOrDefault("expiry", "").toString();
-            List<String> features = body.get("features") instanceof List ? (List<String>) body.get("features") : new java.util.ArrayList<>();
-
-            LocalDate endDate = expiry.isBlank() ? LocalDate.now().plusYears(1) : LocalDate.parse(expiry);
-            LicenseStatus status = inGrace ? LicenseStatus.GRACE : LicenseStatus.ACTIVE;
-
-            log.info("OPAC master license confirmed for org={} status={}", orgCode, status);
-
-            return LicenseStatusResponse.builder()
-                    .organizationId(organizationId)
-                    .organizationName(orgName)
-                    .licenseName("Master License (via OPAC)")
-                    .orgCode(orgCode)
-                    .endDate(endDate)
-                    .gracePeriodDays(gracePeriod)
-                    .maximumUsers(userLimit)
-                    .concurrentUsers(concurrentLimit)
-                    .status(status)
-                    .daysRemaining(daysRemaining)
-                    .inGracePeriod(inGrace)
-                    .graceRemaining(graceRemaining)
-                    .features(features)
-                    .build();
-        } catch (Exception e) {
-            log.warn("Could not reach OPAC for license check (org={}): {}", orgCode, e.getMessage());
-            return null;
-        }
-    }
-
     @Override
     public LicenseCheckResult check(String organizationId) {
         if (organizationId == null) {
@@ -243,7 +196,7 @@ public class LicenseServiceImpl implements LicenseService {
             // No local CRM license — fall back to OPAC master license check.
             Organization org = orgRepository.findById(organizationId).orElse(null);
             if (org != null) {
-                LicenseStatusResponse opacStatus = checkOpacMasterLicense(org.getOrganizationCode(), organizationId, org.getOrganizationName());
+                LicenseStatusResponse opacStatus = opacLicenseCacheService.checkOpacMasterLicense(org.getOrganizationCode(), organizationId, org.getOrganizationName());
                 if (opacStatus != null && (opacStatus.getStatus() == LicenseStatus.ACTIVE || opacStatus.getStatus() == LicenseStatus.GRACE)) {
                     boolean inGrace = opacStatus.getStatus() == LicenseStatus.GRACE;
                     int graceRemaining = inGrace ? opacStatus.getGraceRemaining() : 0;

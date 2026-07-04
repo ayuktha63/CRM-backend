@@ -20,6 +20,7 @@ public class GoogleOAuthServiceImpl implements GoogleOAuthService {
 
     private final GoogleOAuthProperties properties;
     private final ConnectedMailboxRepository connectedMailboxRepository;
+    private final RestTemplate restTemplate;
 
     @Override
     public String generateAuthorizationUrl() {
@@ -35,8 +36,6 @@ public class GoogleOAuthServiceImpl implements GoogleOAuthService {
 
     @Override
     public String handleCallback(String code) {
-
-        RestTemplate restTemplate = new RestTemplate();
 
         String tokenUrl =
                 "https://oauth2.googleapis.com/token"

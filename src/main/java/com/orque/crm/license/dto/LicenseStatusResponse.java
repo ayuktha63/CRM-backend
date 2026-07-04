@@ -1,14 +1,18 @@
 package com.orque.crm.license.dto;
 
 import com.orque.crm.enums.LicenseStatus;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class LicenseStatusResponse {
     private Long id;
     private String organizationId;
