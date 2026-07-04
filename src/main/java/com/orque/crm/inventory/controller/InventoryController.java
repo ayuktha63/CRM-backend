@@ -27,6 +27,12 @@ public class InventoryController {
         return ResponseEntity.ok(service.saveVendor(vendor));
     }
 
+    @DeleteMapping("/vendors/{id}")
+    public ResponseEntity<Void> deleteVendor(@PathVariable Long id) {
+        service.deleteVendor(id);
+        return ResponseEntity.ok().build();
+    }
+
     // ── Price Books ──
     @GetMapping("/price-books")
     public ResponseEntity<List<PriceBook>> getPriceBooks() {
@@ -36,6 +42,12 @@ public class InventoryController {
     @PostMapping("/price-books")
     public ResponseEntity<PriceBook> savePriceBook(@RequestBody PriceBook book) {
         return ResponseEntity.ok(service.savePriceBook(book));
+    }
+
+    @DeleteMapping("/price-books/{id}")
+    public ResponseEntity<Void> deletePriceBook(@PathVariable Long id) {
+        service.deletePriceBook(id);
+        return ResponseEntity.ok().build();
     }
 
     @PostMapping("/price-books/entries")
@@ -52,6 +64,12 @@ public class InventoryController {
     @PostMapping("/warehouses")
     public ResponseEntity<Warehouse> saveWarehouse(@RequestBody Warehouse warehouse) {
         return ResponseEntity.ok(service.saveWarehouse(warehouse));
+    }
+
+    @DeleteMapping("/warehouses/{id}")
+    public ResponseEntity<Void> deleteWarehouse(@PathVariable Long id) {
+        service.deleteWarehouse(id);
+        return ResponseEntity.ok().build();
     }
 
     @GetMapping("/warehouses/{id}/stock")
@@ -86,6 +104,12 @@ public class InventoryController {
         return ResponseEntity.ok(service.savePurchaseOrder(po, username));
     }
 
+    @DeleteMapping("/purchase-orders/{id}")
+    public ResponseEntity<Void> deletePurchaseOrder(@PathVariable Long id) {
+        service.deletePurchaseOrder(id);
+        return ResponseEntity.ok().build();
+    }
+
     // ── Sales Orders ──
     @GetMapping("/sales-orders")
     public ResponseEntity<List<SalesOrder>> getSalesOrders() {
@@ -101,5 +125,11 @@ public class InventoryController {
             // fallback
         }
         return ResponseEntity.ok(service.saveSalesOrder(so, username));
+    }
+
+    @DeleteMapping("/sales-orders/{id}")
+    public ResponseEntity<Void> deleteSalesOrder(@PathVariable Long id) {
+        service.deleteSalesOrder(id);
+        return ResponseEntity.ok().build();
     }
 }
