@@ -45,9 +45,13 @@ public class LicenseValidationFilter extends OncePerRequestFilter {
             return;
         }
 
-        // Bypass license checks for activation, status, settings license decryption, notifications, and search
+        // Bypass license checks for activation, key generation, status, settings license
+        // decryption, notifications, and search. /generate must be exempt alongside
+        // /activate — otherwise a SYSTEM_ADMIN can never generate the very first license
+        // key needed to activate a system-wide license (chicken-and-egg lockout).
         String path = request.getServletPath();
-        if (path.startsWith("/api/v1/license/activate") || 
+        if (path.startsWith("/api/v1/license/activate") ||
+            path.startsWith("/api/v1/license/generate") ||
             path.startsWith("/api/v1/license/status") ||
             path.startsWith("/api/v1/settings/license") ||
             path.startsWith("/api/v1/notifications") ||
