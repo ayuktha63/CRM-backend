@@ -60,8 +60,11 @@ public class LicenseValidationFilter extends OncePerRequestFilter {
             return;
         }
 
-        // Check system license for SYSTEM_ADMIN (fail-closed if missing/expired)
-        if (UserContextHelper.isSystemAdmin()) {
+        // The "SYSTEM" master-license bypass is only for the true ORQUE platform owner
+        // (no organizationId at all) — SYSTEM_ADMIN is also the role every OPAC tenant's
+        // own system admin gets synced in as, and they must be checked against their own
+        // org's license, not a global "SYSTEM" row that was never meant to cover them.
+        if (UserContextHelper.isSystemAdmin() && UserContextHelper.currentOrganizationId() == null) {
             LicenseService.LicenseCheckResult systemResult = licenseService.check("SYSTEM");
             if (!systemResult.allowed()) {
                 log.warn("System license check failed for SYSTEM_ADMIN: {}", systemResult.message());
