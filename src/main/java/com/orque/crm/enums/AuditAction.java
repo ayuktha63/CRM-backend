@@ -15,6 +15,7 @@ public enum AuditAction {
     CONTACT_CONVERTED_TO_LEAD,
     BULK_CONTACT_CONVERTED_TO_LEAD,
     LEAD_STATUS_CHANGED,
+    LEAD_DELETED,
 
     // Tasks
     TASK_CREATED,

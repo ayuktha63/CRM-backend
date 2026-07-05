@@ -538,4 +538,26 @@ public class LeadServiceImpl implements LeadService {
                 .createdAt(activity.getCreatedAt())
                 .build();
     }
+
+    @Override
+    @Transactional
+    public void deleteLead(Long id) {
+        Lead lead = leadRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Lead not found: " + id));
+
+        leadActivityRepository.deleteByLeadId(id);
+        leadRepository.delete(lead);
+
+        auditLogService.createAudit(
+                AuditAction.LEAD_DELETED,
+                AuditModule.LEAD,
+                "Lead",
+                id,
+                null,
+                lead.getFullName(),
+                "Lead deleted: " + lead.getFullName(),
+                lead.getAssignedOwner(),
+                null
+        );
+    }
 }

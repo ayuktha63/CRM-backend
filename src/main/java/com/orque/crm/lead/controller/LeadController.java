@@ -119,4 +119,11 @@ public class LeadController {
         requests.forEach(r -> r.setAssignedOwner(owner));
         return leadService.bulkImportLeads(requests);
     }
+
+    @DeleteMapping("/{id}")
+    public void deleteLead(@PathVariable Long id) {
+        LeadResponse existing = leadService.getLeadById(id);
+        UserContextHelper.assertAccess(existing.getAssignedOwner());
+        leadService.deleteLead(id);
+    }
 }

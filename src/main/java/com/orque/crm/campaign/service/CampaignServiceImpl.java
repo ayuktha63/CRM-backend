@@ -111,6 +111,9 @@ public class CampaignServiceImpl implements CampaignService {
         campaign.setSubjectLine(request.getSubjectLine());
         campaign.setEmailBody(request.getEmailBody());
         campaign.setMailboxId(request.getMailboxId());
+        if (request.getStatus() != null) {
+            campaign.setStatus(request.getStatus());
+        }
 
         Campaign saved = campaignRepository.save(campaign);
         return mapCampaignToResponse(saved);
