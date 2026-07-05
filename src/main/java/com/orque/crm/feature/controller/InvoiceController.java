@@ -2,6 +2,7 @@ package com.orque.crm.feature.controller;
 
 import com.orque.crm.common.UserContextHelper;
 import com.orque.crm.feature.entity.Invoice;
+import com.orque.crm.feature.entity.LineItem;
 import com.orque.crm.feature.repository.InvoiceRepository;
 import com.orque.crm.feature.repository.QuoteRepository;
 import com.orque.crm.organization.entity.Organization;
@@ -14,6 +15,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.HashMap;
@@ -62,6 +64,7 @@ public class InvoiceController {
     @PostMapping
     public ResponseEntity<Invoice> save(@RequestBody Invoice invoice) {
         String currentUsername = UserContextHelper.currentUsername();
+        recomputeAmountFromLineItems(invoice);
         if (invoice.getId() != null) {
             Invoice existing = invoiceRepository.findById(invoice.getId())
                     .orElseThrow(() -> new NoSuchElementException(INVOICE_NOT_FOUND));
@@ -73,6 +76,7 @@ public class InvoiceController {
             existing.setDueDate(invoice.getDueDate());
             existing.setPaidDate(invoice.getPaidDate());
             existing.setStatus(invoice.getStatus());
+            existing.setLineItems(invoice.getLineItems());
             // Preserve original owner — edit does not reassign
             return ResponseEntity.ok(invoiceRepository.save(existing));
         }
@@ -90,6 +94,7 @@ public class InvoiceController {
         Invoice existing = invoiceRepository.findById(id)
                 .orElseThrow(() -> new NoSuchElementException(INVOICE_NOT_FOUND));
         UserContextHelper.assertAccess(existing.getCreatedBy());
+        recomputeAmountFromLineItems(invoice);
         existing.setInvoiceNumber(invoice.getInvoiceNumber());
         existing.setContact(invoice.getContact());
         existing.setAccount(invoice.getAccount());
@@ -97,7 +102,23 @@ public class InvoiceController {
         existing.setDueDate(invoice.getDueDate());
         existing.setPaidDate(invoice.getPaidDate());
         existing.setStatus(invoice.getStatus());
+        existing.setLineItems(invoice.getLineItems());
         return ResponseEntity.ok(invoiceRepository.save(existing));
+    }
+
+    /** Mirrors QuoteController's recompute — see there for why the client's amount is never trusted. */
+    private void recomputeAmountFromLineItems(Invoice invoice) {
+        List<LineItem> items = invoice.getLineItems();
+        if (items == null || items.isEmpty()) return;
+        BigDecimal total = BigDecimal.ZERO;
+        for (LineItem item : items) {
+            int qty = item.getQuantity() != null ? item.getQuantity() : 0;
+            BigDecimal unitPrice = item.getUnitPrice() != null ? item.getUnitPrice() : BigDecimal.ZERO;
+            BigDecimal lineTotal = unitPrice.multiply(BigDecimal.valueOf(qty));
+            item.setLineTotal(lineTotal);
+            total = total.add(lineTotal);
+        }
+        invoice.setAmount(total);
     }
 
     @PostMapping("/submit/{id}")
@@ -146,6 +167,7 @@ public class InvoiceController {
         tokens.put("amount",        pdfGeneratorService.formatAmount(inv.getAmount()));
         tokens.put("tax",           pdfGeneratorService.calcTax(inv.getAmount()));
         tokens.put("grandTotal",    pdfGeneratorService.calcGrandTotal(inv.getAmount()));
+        tokens.put("lineItemsRows", pdfGeneratorService.buildLineItemRows(inv.getLineItems(), inv.getAmount()));
         tokens.put("generatedAt",   pdfGeneratorService.nowFormatted());
 
         byte[] pdf = pdfGeneratorService.generate("invoice-template.html", tokens);

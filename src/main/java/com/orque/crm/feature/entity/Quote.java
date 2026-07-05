@@ -5,6 +5,8 @@ import lombok.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "quotes")
@@ -35,6 +37,12 @@ public class Quote {
     private String createdBy;
     private String status;
     private Long dealId;
+
+    /** Product lines. When present, `amount` is always recomputed as their sum. */
+    @ElementCollection
+    @CollectionTable(name = "quote_line_items", joinColumns = @JoinColumn(name = "quote_id"))
+    @Builder.Default
+    private List<LineItem> lineItems = new ArrayList<>();
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

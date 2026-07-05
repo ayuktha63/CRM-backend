@@ -2,6 +2,7 @@ package com.orque.crm.feature.controller;
 
 import com.orque.crm.common.UserContextHelper;
 import com.orque.crm.feature.entity.Invoice;
+import com.orque.crm.feature.entity.LineItem;
 import com.orque.crm.feature.entity.Quote;
 import com.orque.crm.feature.repository.InvoiceRepository;
 import com.orque.crm.feature.repository.QuoteRepository;
@@ -15,8 +16,10 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -63,6 +66,7 @@ public class QuoteController {
     @PostMapping
     public ResponseEntity<Quote> save(@RequestBody Quote quote) {
         String currentUsername = UserContextHelper.currentUsername();
+        recomputeAmountFromLineItems(quote);
         if (quote.getId() != null) {
             Quote existing = quoteRepository.findById(quote.getId())
                     .orElseThrow(() -> new NoSuchElementException(QUOTE_NOT_FOUND));
@@ -73,6 +77,7 @@ public class QuoteController {
             existing.setAmount(quote.getAmount());
             existing.setValidUntil(quote.getValidUntil());
             existing.setStatus(quote.getStatus());
+            existing.setLineItems(quote.getLineItems());
             // Preserve original owner — edit does not reassign
             return ResponseEntity.ok(quoteRepository.save(existing));
         }
@@ -90,13 +95,35 @@ public class QuoteController {
         Quote existing = quoteRepository.findById(id)
                 .orElseThrow(() -> new NoSuchElementException(QUOTE_NOT_FOUND));
         UserContextHelper.assertAccess(existing.getOrganizationId(), existing.getCreatedBy());
+        recomputeAmountFromLineItems(quote);
         existing.setQuoteNumber(quote.getQuoteNumber());
         existing.setContact(quote.getContact());
         existing.setAccount(quote.getAccount());
         existing.setAmount(quote.getAmount());
         existing.setValidUntil(quote.getValidUntil());
         existing.setStatus(quote.getStatus());
+        existing.setLineItems(quote.getLineItems());
         return ResponseEntity.ok(quoteRepository.save(existing));
+    }
+
+    /**
+     * When line items are present, `amount` is always the server-computed sum of each
+     * line's quantity × unit price — never trusts a client-supplied flat amount once
+     * real line items exist, so the two can't drift apart. Quotes/invoices with no line
+     * items (legacy flat-amount entry) are left untouched.
+     */
+    private void recomputeAmountFromLineItems(Quote quote) {
+        List<LineItem> items = quote.getLineItems();
+        if (items == null || items.isEmpty()) return;
+        BigDecimal total = BigDecimal.ZERO;
+        for (LineItem item : items) {
+            int qty = item.getQuantity() != null ? item.getQuantity() : 0;
+            BigDecimal unitPrice = item.getUnitPrice() != null ? item.getUnitPrice() : BigDecimal.ZERO;
+            BigDecimal lineTotal = unitPrice.multiply(BigDecimal.valueOf(qty));
+            item.setLineTotal(lineTotal);
+            total = total.add(lineTotal);
+        }
+        quote.setAmount(total);
     }
 
     @PostMapping("/submit/{id}")
@@ -144,6 +171,7 @@ public class QuoteController {
                 .dealId(quote.getDealId())
                 .createdBy(quote.getCreatedBy())
                 .status(STATUS_DRAFT)
+                .lineItems(new ArrayList<>(quote.getLineItems()))
                 .build();
 
         return ResponseEntity.ok(invoiceRepository.save(invoice));
@@ -169,6 +197,7 @@ public class QuoteController {
         tokens.put("amount",      pdfGeneratorService.formatAmount(q.getAmount()));
         tokens.put("tax",         pdfGeneratorService.calcTax(q.getAmount()));
         tokens.put("grandTotal",  pdfGeneratorService.calcGrandTotal(q.getAmount()));
+        tokens.put("lineItemsRows", pdfGeneratorService.buildLineItemRows(q.getLineItems(), q.getAmount()));
         tokens.put("validUntil",  pdfGeneratorService.formatDate(q.getValidUntil()));
         tokens.put("generatedAt", pdfGeneratorService.nowFormatted());
 

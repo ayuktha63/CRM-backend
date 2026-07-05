@@ -4,6 +4,7 @@ import com.lowagie.text.Document;
 import com.lowagie.text.PageSize;
 import com.lowagie.text.html.simpleparser.HTMLWorker;
 import com.lowagie.text.pdf.PdfWriter;
+import com.orque.crm.feature.entity.LineItem;
 import com.orque.crm.organization.entity.Organization;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.ClassPathResource;
@@ -19,6 +20,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -124,5 +126,36 @@ public class PdfGeneratorService {
         tokens.put("paymentTermsDays", org.getPaymentTermsDays() != null ? String.valueOf(org.getPaymentTermsDays()) : "30");
         tokens.put("lateFeeText", org.getLateFeeText() != null ? org.getLateFeeText() : "—");
         return tokens;
+    }
+
+    /**
+     * Builds the "Description / Qty / Unit Price / Total" table rows for a Quote/Invoice's
+     * product lines. Falls back to a single placeholder row for legacy records saved
+     * before line items existed (flat `amount` only, no products attached).
+     */
+    public String buildLineItemRows(List<LineItem> items, BigDecimal fallbackAmount) {
+        if (items == null || items.isEmpty()) {
+            return "<tr bgcolor=\"#ffffff\">"
+                    + "<td style=\"border-bottom: 1px solid #e5e7eb;\">—</td>"
+                    + "<td align=\"right\" style=\"border-bottom: 1px solid #e5e7eb;\">1</td>"
+                    + "<td align=\"right\" style=\"border-bottom: 1px solid #e5e7eb;\">" + formatAmount(fallbackAmount) + "</td>"
+                    + "<td align=\"right\" style=\"border-bottom: 1px solid #e5e7eb;\">" + formatAmount(fallbackAmount) + "</td>"
+                    + "</tr>";
+        }
+        StringBuilder rows = new StringBuilder();
+        for (LineItem item : items) {
+            rows.append("<tr bgcolor=\"#ffffff\">")
+                    .append("<td style=\"border-bottom: 1px solid #e5e7eb;\">").append(escapeHtml(item.getProductName())).append("</td>")
+                    .append("<td align=\"right\" style=\"border-bottom: 1px solid #e5e7eb;\">").append(item.getQuantity() != null ? item.getQuantity() : 0).append("</td>")
+                    .append("<td align=\"right\" style=\"border-bottom: 1px solid #e5e7eb;\">").append(formatAmount(item.getUnitPrice())).append("</td>")
+                    .append("<td align=\"right\" style=\"border-bottom: 1px solid #e5e7eb;\">").append(formatAmount(item.getLineTotal())).append("</td>")
+                    .append("</tr>");
+        }
+        return rows.toString();
+    }
+
+    private String escapeHtml(String s) {
+        if (s == null) return "—";
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 }

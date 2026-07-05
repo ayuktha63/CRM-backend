@@ -5,6 +5,8 @@ import lombok.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "invoices")
@@ -37,6 +39,12 @@ public class Invoice {
     private Long quoteId;
     private Long dealId;
     private String createdBy;
+
+    /** Product lines. When present, `amount` is always recomputed as their sum. */
+    @ElementCollection
+    @CollectionTable(name = "invoice_line_items", joinColumns = @JoinColumn(name = "invoice_id"))
+    @Builder.Default
+    private List<LineItem> lineItems = new ArrayList<>();
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
