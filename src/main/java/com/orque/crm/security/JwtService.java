@@ -53,6 +53,29 @@ public class JwtService {
         return extractAllClaims(token).getSubject();
     }
 
+    /** Short-lived signed token used as the OAuth "state" param to prevent CSRF/account-hijack on callback. */
+    public String generateOAuthStateToken(String username) {
+        Date now = new Date();
+        SecretKey key = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
+        return Jwts.builder()
+                .subject(username)
+                .issuedAt(now)
+                .expiration(new Date(now.getTime() + 600_000L)) // 10 minutes
+                .signWith(key)
+                .compact();
+    }
+
+    /** Verifies and decodes an OAuth state token; returns the username, or null if invalid/expired. */
+    public String extractUsernameFromStateToken(String token) {
+        try {
+            Claims claims = extractAllClaims(token);
+            if (claims.getExpiration().before(new Date())) return null;
+            return claims.getSubject();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     public boolean isTokenValid(String token, User user) {
         String username = extractUsername(token);
 

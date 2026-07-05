@@ -40,6 +40,7 @@ public class CrmCalendarEvent {
     private Integer reminderMinutes; // Minutes before start to notify user
 
     private String createdBy;
+    private String organizationId;
     private LocalDateTime createdAt;
 
     // Time Zone and Sync

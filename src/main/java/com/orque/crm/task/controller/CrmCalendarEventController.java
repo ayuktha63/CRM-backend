@@ -2,6 +2,7 @@ package com.orque.crm.task.controller;
 
 import com.orque.crm.task.entity.CrmCalendarEvent;
 import com.orque.crm.task.service.CrmCalendarEventService;
+import com.orque.crm.task.service.GoogleCalendarSyncService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -17,6 +18,7 @@ import java.util.List;
 public class CrmCalendarEventController {
 
     private final CrmCalendarEventService service;
+    private final GoogleCalendarSyncService googleCalendarSyncService;
 
     @GetMapping
     public ResponseEntity<List<CrmCalendarEvent>> getEvents() {
@@ -68,12 +70,8 @@ public class CrmCalendarEventController {
 
     @PostMapping("/sync/google")
     public ResponseEntity<java.util.Map<String, Object>> syncGoogle() {
-        java.util.Map<String, Object> res = new java.util.HashMap<>();
-        res.put("success", true);
-        res.put("provider", "Google Calendar");
-        res.put("syncedCount", 3);
-        res.put("lastSynced", java.time.LocalDateTime.now().toString());
-        return ResponseEntity.ok(res);
+        String username = com.orque.crm.common.UserContextHelper.currentUsername();
+        return ResponseEntity.ok(googleCalendarSyncService.syncNow(username));
     }
 
     @PostMapping("/sync/outlook")

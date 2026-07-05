@@ -1,5 +1,6 @@
 package com.orque.crm.task.service;
 
+import com.orque.crm.common.UserContextHelper;
 import com.orque.crm.task.entity.CrmCalendarEvent;
 import com.orque.crm.task.repository.CrmCalendarEventRepository;
 import com.orque.crm.notification.service.NotificationService;
@@ -18,16 +19,25 @@ public class CrmCalendarEventService {
 
     private final CrmCalendarEventRepository repository;
     private final NotificationService notificationService;
+    private final GoogleCalendarSyncService googleCalendarSyncService;
 
     private static final DateTimeFormatter ICS_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'");
 
     public List<CrmCalendarEvent> getEvents(String username) {
-        return repository.findByCreatedByIgnoreCase(username);
+        String orgId = UserContextHelper.scopedOrgId();
+        String owner = UserContextHelper.scopedOwner(); // null for org admins -> see everyone in the org
+        if (owner == null) {
+            return orgId != null ? repository.findByOrganizationId(orgId) : repository.findByCreatedByIgnoreCase(username);
+        }
+        return orgId != null
+                ? repository.findByOrganizationIdAndCreatedByIgnoreCase(orgId, owner)
+                : repository.findByCreatedByIgnoreCase(owner);
     }
 
     @Transactional
     public CrmCalendarEvent saveEvent(CrmCalendarEvent event, String username) {
         event.setCreatedBy(username);
+        event.setOrganizationId(UserContextHelper.currentOrganizationId());
         CrmCalendarEvent saved = repository.save(event);
 
         // Schedule notification reminder if configured
@@ -39,17 +49,24 @@ public class CrmCalendarEventService {
                     "/calendar"
             );
         }
+
+        googleCalendarSyncService.pushEvent(saved);
         return saved;
     }
 
     @Transactional
     public void deleteEvent(Long id) {
-        repository.deleteById(id);
+        repository.findById(id).ifPresent(event -> {
+            UserContextHelper.assertAccess(event.getOrganizationId(), event.getCreatedBy());
+            googleCalendarSyncService.deleteRemoteEvent(event);
+            repository.deleteById(id);
+        });
     }
 
     public String exportEventToIcs(Long eventId) {
         CrmCalendarEvent event = repository.findById(eventId)
                 .orElseThrow(() -> new NoSuchElementException("Event not found"));
+        UserContextHelper.assertAccess(event.getOrganizationId(), event.getCreatedBy());
 
         StringBuilder ics = new StringBuilder();
         ics.append("BEGIN:VCALENDAR\r\n");
@@ -108,6 +125,7 @@ public class CrmCalendarEventService {
                 .endDateTime(end)
                 .meetingRoom(room)
                 .createdBy(username)
+                .organizationId(UserContextHelper.currentOrganizationId())
                 .build();
 
         return repository.save(event);

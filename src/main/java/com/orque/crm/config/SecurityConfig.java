@@ -41,6 +41,7 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/api/v1/auth/**",
                                 "/api/v1/google/oauth/**",
+                                "/api/v1/calendar/google/oauth/callback",
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**"
                         ).permitAll()
