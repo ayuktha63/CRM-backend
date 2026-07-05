@@ -46,6 +46,22 @@ public class Invoice {
     @Builder.Default
     private List<LineItem> lineItems = new ArrayList<>();
 
+    /** Free-text state used only to pick GST same-state (CGST/SGST) vs different-state (IGST). */
+    private String customerState;
+
+    /**
+     * Tax breakdown snapshot computed by TaxCalculationService at save time — never
+     * recomputed later, so changing the org's country/tax config afterward doesn't
+     * retroactively change quotes/invoices that already exist.
+     */
+    private String taxSystem;
+
+    @Column(columnDefinition = "TEXT")
+    private String taxBreakdownJson;
+
+    private BigDecimal totalTax;
+    private BigDecimal grandTotal;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 

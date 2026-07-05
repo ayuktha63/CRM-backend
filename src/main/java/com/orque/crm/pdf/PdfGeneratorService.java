@@ -1,11 +1,13 @@
 package com.orque.crm.pdf;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lowagie.text.Document;
 import com.lowagie.text.PageSize;
 import com.lowagie.text.html.simpleparser.HTMLWorker;
 import com.lowagie.text.pdf.PdfWriter;
 import com.orque.crm.feature.entity.LineItem;
 import com.orque.crm.organization.entity.Organization;
+import com.orque.crm.tax.dto.TaxComponent;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
@@ -30,6 +32,7 @@ public class PdfGeneratorService {
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("dd MMM yyyy");
     private static final DateTimeFormatter DT_FMT   = DateTimeFormatter.ofPattern("dd MMM yyyy HH:mm");
     private static final BigDecimal GST_RATE        = new BigDecimal("0.18");
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
      * Load an HTML template from classpath (resources/templates/pdf/) and replace
@@ -79,14 +82,15 @@ public class PdfGeneratorService {
         return String.format("%,.2f", amount);
     }
 
+    /** Legacy flat-18%-GST fallback, used only when a record predates the tax engine. */
     public String calcTax(BigDecimal amount) {
         if (amount == null) return "0.00";
         return formatAmount(amount.multiply(GST_RATE).setScale(2, RoundingMode.HALF_UP));
     }
 
-    public String calcGrandTotal(BigDecimal amount) {
-        if (amount == null) return "0.00";
-        return formatAmount(amount.multiply(BigDecimal.ONE.add(GST_RATE)).setScale(2, RoundingMode.HALF_UP));
+    public BigDecimal fallbackGrandTotal(BigDecimal amount) {
+        if (amount == null) return BigDecimal.ZERO;
+        return amount.multiply(BigDecimal.ONE.add(GST_RATE)).setScale(2, RoundingMode.HALF_UP);
     }
 
     public String nowFormatted() {
@@ -157,5 +161,35 @@ public class PdfGeneratorService {
     private String escapeHtml(String s) {
         if (s == null) return "—";
         return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+    }
+
+    /**
+     * Builds the tax-component rows (e.g. "CGST 9%" / "SGST 9%" for India, or a single
+     * "VAT 5%" row for UAE/Kenya) from the JSON snapshot TaxCalculationService stored on
+     * the Quote/Invoice at save time. Falls back to a flat 18% GST row for records saved
+     * before the tax engine existed (taxBreakdownJson is null on those).
+     */
+    public String buildTaxRows(String taxBreakdownJson, BigDecimal fallbackAmount) {
+        List<TaxComponent> components = null;
+        if (taxBreakdownJson != null && !taxBreakdownJson.isBlank()) {
+            try {
+                components = objectMapper.readValue(taxBreakdownJson,
+                        objectMapper.getTypeFactory().constructCollectionType(List.class, TaxComponent.class));
+            } catch (Exception e) {
+                components = null;
+            }
+        }
+        if (components == null || components.isEmpty()) {
+            return "<tr><td style=\"border-bottom: 1px solid #e5e7eb;\"><font color=\"#374151\">GST (18%)</font></td>"
+                    + "<td align=\"right\" style=\"border-bottom: 1px solid #e5e7eb;\">Rs " + calcTax(fallbackAmount) + "</td></tr>";
+        }
+        StringBuilder rows = new StringBuilder();
+        for (TaxComponent c : components) {
+            rows.append("<tr><td style=\"border-bottom: 1px solid #e5e7eb;\"><font color=\"#374151\">")
+                    .append(escapeHtml(c.getName())).append(" ").append(c.getRate()).append("%</font></td>")
+                    .append("<td align=\"right\" style=\"border-bottom: 1px solid #e5e7eb;\">Rs ")
+                    .append(formatAmount(c.getAmount())).append("</td></tr>");
+        }
+        return rows.toString();
     }
 }

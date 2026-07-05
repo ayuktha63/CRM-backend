@@ -1,5 +1,6 @@
 package com.orque.crm.feature.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.orque.crm.common.UserContextHelper;
 import com.orque.crm.feature.entity.Invoice;
 import com.orque.crm.feature.entity.LineItem;
@@ -10,6 +11,10 @@ import com.orque.crm.organization.entity.Organization;
 import com.orque.crm.organization.repository.OrganizationRepository;
 import com.orque.crm.pdf.PdfGeneratorService;
 import com.orque.crm.settings.service.UserSettingsService;
+import com.orque.crm.tax.dto.TaxBreakdown;
+import com.orque.crm.tax.entity.OrganizationTaxSettings;
+import com.orque.crm.tax.service.OrganizationTaxSettingsService;
+import com.orque.crm.tax.service.TaxCalculationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -39,6 +44,9 @@ public class QuoteController {
     private final OrganizationRepository organizationRepository;
     private final PdfGeneratorService pdfGeneratorService;
     private final UserSettingsService userSettingsService;
+    private final OrganizationTaxSettingsService taxSettingsService;
+    private final TaxCalculationService taxCalculationService;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @GetMapping
     public ResponseEntity<List<Quote>> getAll() {
@@ -66,11 +74,11 @@ public class QuoteController {
     @PostMapping
     public ResponseEntity<Quote> save(@RequestBody Quote quote) {
         String currentUsername = UserContextHelper.currentUsername();
-        recomputeAmountFromLineItems(quote);
         if (quote.getId() != null) {
             Quote existing = quoteRepository.findById(quote.getId())
                     .orElseThrow(() -> new NoSuchElementException(QUOTE_NOT_FOUND));
             UserContextHelper.assertAccess(existing.getOrganizationId(), existing.getCreatedBy());
+            applyTaxAndAmount(quote, existing.getOrganizationId());
             existing.setQuoteNumber(quote.getQuoteNumber());
             existing.setContact(quote.getContact());
             existing.setAccount(quote.getAccount());
@@ -78,11 +86,17 @@ public class QuoteController {
             existing.setValidUntil(quote.getValidUntil());
             existing.setStatus(quote.getStatus());
             existing.setLineItems(quote.getLineItems());
+            existing.setCustomerState(quote.getCustomerState());
+            existing.setTaxSystem(quote.getTaxSystem());
+            existing.setTaxBreakdownJson(quote.getTaxBreakdownJson());
+            existing.setTotalTax(quote.getTotalTax());
+            existing.setGrandTotal(quote.getGrandTotal());
             // Preserve original owner — edit does not reassign
             return ResponseEntity.ok(quoteRepository.save(existing));
         }
         quote.setCreatedBy(currentUsername);
         quote.setOrganizationId(UserContextHelper.currentOrganizationId());
+        applyTaxAndAmount(quote, quote.getOrganizationId());
         if (quote.getStatus() == null) quote.setStatus(STATUS_DRAFT);
         if (quote.getQuoteNumber() == null || quote.getQuoteNumber().isBlank()) {
             quote.setQuoteNumber(userSettingsService.getAndIncrementQuoteNumber());
@@ -95,7 +109,7 @@ public class QuoteController {
         Quote existing = quoteRepository.findById(id)
                 .orElseThrow(() -> new NoSuchElementException(QUOTE_NOT_FOUND));
         UserContextHelper.assertAccess(existing.getOrganizationId(), existing.getCreatedBy());
-        recomputeAmountFromLineItems(quote);
+        applyTaxAndAmount(quote, existing.getOrganizationId());
         existing.setQuoteNumber(quote.getQuoteNumber());
         existing.setContact(quote.getContact());
         existing.setAccount(quote.getAccount());
@@ -103,27 +117,45 @@ public class QuoteController {
         existing.setValidUntil(quote.getValidUntil());
         existing.setStatus(quote.getStatus());
         existing.setLineItems(quote.getLineItems());
+        existing.setCustomerState(quote.getCustomerState());
+        existing.setTaxSystem(quote.getTaxSystem());
+        existing.setTaxBreakdownJson(quote.getTaxBreakdownJson());
+        existing.setTotalTax(quote.getTotalTax());
+        existing.setGrandTotal(quote.getGrandTotal());
         return ResponseEntity.ok(quoteRepository.save(existing));
     }
 
     /**
-     * When line items are present, `amount` is always the server-computed sum of each
-     * line's quantity × unit price — never trusts a client-supplied flat amount once
-     * real line items exist, so the two can't drift apart. Quotes/invoices with no line
-     * items (legacy flat-amount entry) are left untouched.
+     * When line items are present: recomputes `amount` as the server-side sum of each
+     * line's quantity × unit price (never trusts a client-supplied flat amount once real
+     * line items exist), then runs it through TaxCalculationService — the single source
+     * of truth for tax — using this org's current tax settings, and snapshots the
+     * resulting breakdown onto the quote. Quotes with no line items (legacy flat-amount
+     * entry) are left untouched, including their tax fields.
      */
-    private void recomputeAmountFromLineItems(Quote quote) {
+    private void applyTaxAndAmount(Quote quote, String organizationId) {
         List<LineItem> items = quote.getLineItems();
         if (items == null || items.isEmpty()) return;
-        BigDecimal total = BigDecimal.ZERO;
+        BigDecimal subtotal = BigDecimal.ZERO;
         for (LineItem item : items) {
             int qty = item.getQuantity() != null ? item.getQuantity() : 0;
             BigDecimal unitPrice = item.getUnitPrice() != null ? item.getUnitPrice() : BigDecimal.ZERO;
             BigDecimal lineTotal = unitPrice.multiply(BigDecimal.valueOf(qty));
             item.setLineTotal(lineTotal);
-            total = total.add(lineTotal);
+            subtotal = subtotal.add(lineTotal);
         }
-        quote.setAmount(total);
+        quote.setAmount(subtotal);
+
+        OrganizationTaxSettings settings = taxSettingsService.findForOrg(organizationId);
+        TaxBreakdown breakdown = taxCalculationService.calculate(settings, quote.getCustomerState(), subtotal);
+        quote.setTaxSystem(breakdown.getTaxSystem());
+        quote.setTotalTax(breakdown.getTotalTax());
+        quote.setGrandTotal(breakdown.getGrandTotal());
+        try {
+            quote.setTaxBreakdownJson(objectMapper.writeValueAsString(breakdown.getTaxes()));
+        } catch (Exception e) {
+            quote.setTaxBreakdownJson(null);
+        }
     }
 
     @PostMapping("/submit/{id}")
@@ -172,6 +204,11 @@ public class QuoteController {
                 .createdBy(quote.getCreatedBy())
                 .status(STATUS_DRAFT)
                 .lineItems(new ArrayList<>(quote.getLineItems()))
+                .customerState(quote.getCustomerState())
+                .taxSystem(quote.getTaxSystem())
+                .taxBreakdownJson(quote.getTaxBreakdownJson())
+                .totalTax(quote.getTotalTax())
+                .grandTotal(quote.getGrandTotal())
                 .build();
 
         return ResponseEntity.ok(invoiceRepository.save(invoice));
@@ -195,8 +232,9 @@ public class QuoteController {
         tokens.put("contact",     q.getContact() != null ? q.getContact() : "—");
         tokens.put("createdBy",   q.getCreatedBy() != null ? q.getCreatedBy() : "—");
         tokens.put("amount",      pdfGeneratorService.formatAmount(q.getAmount()));
-        tokens.put("tax",         pdfGeneratorService.calcTax(q.getAmount()));
-        tokens.put("grandTotal",  pdfGeneratorService.calcGrandTotal(q.getAmount()));
+        tokens.put("taxRows",     pdfGeneratorService.buildTaxRows(q.getTaxBreakdownJson(), q.getAmount()));
+        tokens.put("grandTotal",  pdfGeneratorService.formatAmount(
+                q.getGrandTotal() != null ? q.getGrandTotal() : pdfGeneratorService.fallbackGrandTotal(q.getAmount())));
         tokens.put("lineItemsRows", pdfGeneratorService.buildLineItemRows(q.getLineItems(), q.getAmount()));
         tokens.put("validUntil",  pdfGeneratorService.formatDate(q.getValidUntil()));
         tokens.put("generatedAt", pdfGeneratorService.nowFormatted());

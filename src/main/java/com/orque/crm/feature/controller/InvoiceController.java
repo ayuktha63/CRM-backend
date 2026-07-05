@@ -1,5 +1,6 @@
 package com.orque.crm.feature.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.orque.crm.common.UserContextHelper;
 import com.orque.crm.feature.entity.Invoice;
 import com.orque.crm.feature.entity.LineItem;
@@ -9,6 +10,10 @@ import com.orque.crm.organization.entity.Organization;
 import com.orque.crm.organization.repository.OrganizationRepository;
 import com.orque.crm.pdf.PdfGeneratorService;
 import com.orque.crm.settings.service.UserSettingsService;
+import com.orque.crm.tax.dto.TaxBreakdown;
+import com.orque.crm.tax.entity.OrganizationTaxSettings;
+import com.orque.crm.tax.service.OrganizationTaxSettingsService;
+import com.orque.crm.tax.service.TaxCalculationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -37,6 +42,9 @@ public class InvoiceController {
     private final OrganizationRepository organizationRepository;
     private final PdfGeneratorService pdfGeneratorService;
     private final UserSettingsService userSettingsService;
+    private final OrganizationTaxSettingsService taxSettingsService;
+    private final TaxCalculationService taxCalculationService;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @GetMapping
     public ResponseEntity<List<Invoice>> getAll() {
@@ -64,11 +72,11 @@ public class InvoiceController {
     @PostMapping
     public ResponseEntity<Invoice> save(@RequestBody Invoice invoice) {
         String currentUsername = UserContextHelper.currentUsername();
-        recomputeAmountFromLineItems(invoice);
         if (invoice.getId() != null) {
             Invoice existing = invoiceRepository.findById(invoice.getId())
                     .orElseThrow(() -> new NoSuchElementException(INVOICE_NOT_FOUND));
             UserContextHelper.assertAccess(existing.getCreatedBy());
+            applyTaxAndAmount(invoice, existing.getOrganizationId());
             existing.setInvoiceNumber(invoice.getInvoiceNumber());
             existing.setContact(invoice.getContact());
             existing.setAccount(invoice.getAccount());
@@ -77,12 +85,18 @@ public class InvoiceController {
             existing.setPaidDate(invoice.getPaidDate());
             existing.setStatus(invoice.getStatus());
             existing.setLineItems(invoice.getLineItems());
+            existing.setCustomerState(invoice.getCustomerState());
+            existing.setTaxSystem(invoice.getTaxSystem());
+            existing.setTaxBreakdownJson(invoice.getTaxBreakdownJson());
+            existing.setTotalTax(invoice.getTotalTax());
+            existing.setGrandTotal(invoice.getGrandTotal());
             // Preserve original owner — edit does not reassign
             return ResponseEntity.ok(invoiceRepository.save(existing));
         }
         if (invoice.getStatus() == null) invoice.setStatus(STATUS_DRAFT);
         invoice.setCreatedBy(currentUsername);
         invoice.setOrganizationId(UserContextHelper.currentOrganizationId());
+        applyTaxAndAmount(invoice, invoice.getOrganizationId());
         if (invoice.getInvoiceNumber() == null || invoice.getInvoiceNumber().isBlank()) {
             invoice.setInvoiceNumber(userSettingsService.getAndIncrementInvoiceNumber());
         }
@@ -94,7 +108,7 @@ public class InvoiceController {
         Invoice existing = invoiceRepository.findById(id)
                 .orElseThrow(() -> new NoSuchElementException(INVOICE_NOT_FOUND));
         UserContextHelper.assertAccess(existing.getCreatedBy());
-        recomputeAmountFromLineItems(invoice);
+        applyTaxAndAmount(invoice, existing.getOrganizationId());
         existing.setInvoiceNumber(invoice.getInvoiceNumber());
         existing.setContact(invoice.getContact());
         existing.setAccount(invoice.getAccount());
@@ -103,22 +117,38 @@ public class InvoiceController {
         existing.setPaidDate(invoice.getPaidDate());
         existing.setStatus(invoice.getStatus());
         existing.setLineItems(invoice.getLineItems());
+        existing.setCustomerState(invoice.getCustomerState());
+        existing.setTaxSystem(invoice.getTaxSystem());
+        existing.setTaxBreakdownJson(invoice.getTaxBreakdownJson());
+        existing.setTotalTax(invoice.getTotalTax());
+        existing.setGrandTotal(invoice.getGrandTotal());
         return ResponseEntity.ok(invoiceRepository.save(existing));
     }
 
-    /** Mirrors QuoteController's recompute — see there for why the client's amount is never trusted. */
-    private void recomputeAmountFromLineItems(Invoice invoice) {
+    /** Mirrors QuoteController's applyTaxAndAmount — see there for the full rationale. */
+    private void applyTaxAndAmount(Invoice invoice, String organizationId) {
         List<LineItem> items = invoice.getLineItems();
         if (items == null || items.isEmpty()) return;
-        BigDecimal total = BigDecimal.ZERO;
+        BigDecimal subtotal = BigDecimal.ZERO;
         for (LineItem item : items) {
             int qty = item.getQuantity() != null ? item.getQuantity() : 0;
             BigDecimal unitPrice = item.getUnitPrice() != null ? item.getUnitPrice() : BigDecimal.ZERO;
             BigDecimal lineTotal = unitPrice.multiply(BigDecimal.valueOf(qty));
             item.setLineTotal(lineTotal);
-            total = total.add(lineTotal);
+            subtotal = subtotal.add(lineTotal);
         }
-        invoice.setAmount(total);
+        invoice.setAmount(subtotal);
+
+        OrganizationTaxSettings settings = taxSettingsService.findForOrg(organizationId);
+        TaxBreakdown breakdown = taxCalculationService.calculate(settings, invoice.getCustomerState(), subtotal);
+        invoice.setTaxSystem(breakdown.getTaxSystem());
+        invoice.setTotalTax(breakdown.getTotalTax());
+        invoice.setGrandTotal(breakdown.getGrandTotal());
+        try {
+            invoice.setTaxBreakdownJson(objectMapper.writeValueAsString(breakdown.getTaxes()));
+        } catch (Exception e) {
+            invoice.setTaxBreakdownJson(null);
+        }
     }
 
     @PostMapping("/submit/{id}")
@@ -165,8 +195,9 @@ public class InvoiceController {
         tokens.put("createdBy",     inv.getCreatedBy() != null ? inv.getCreatedBy() : "—");
         tokens.put("quoteRef",      quoteRef);
         tokens.put("amount",        pdfGeneratorService.formatAmount(inv.getAmount()));
-        tokens.put("tax",           pdfGeneratorService.calcTax(inv.getAmount()));
-        tokens.put("grandTotal",    pdfGeneratorService.calcGrandTotal(inv.getAmount()));
+        tokens.put("taxRows",       pdfGeneratorService.buildTaxRows(inv.getTaxBreakdownJson(), inv.getAmount()));
+        tokens.put("grandTotal",    pdfGeneratorService.formatAmount(
+                inv.getGrandTotal() != null ? inv.getGrandTotal() : pdfGeneratorService.fallbackGrandTotal(inv.getAmount())));
         tokens.put("lineItemsRows", pdfGeneratorService.buildLineItemRows(inv.getLineItems(), inv.getAmount()));
         tokens.put("generatedAt",   pdfGeneratorService.nowFormatted());
 
