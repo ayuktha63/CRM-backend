@@ -35,5 +35,7 @@ public interface UserSessionRepository extends JpaRepository<UserSession, Long> 
 
     long countByUsernameAndStatus(String username, String status);
 
+    List<UserSession> findByUsernameIgnoreCaseAndStatus(String username, String status);
+
     List<UserSession> findByUsernameIn(java.util.Collection<String> usernames);
 }

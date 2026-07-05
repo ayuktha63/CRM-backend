@@ -28,6 +28,7 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -176,6 +177,18 @@ public class AuthServiceImpl implements AuthService {
         String browser = parseBrowser(ua);
         String os      = parseOs(ua);
         String device  = ua != null && ua.toLowerCase().contains("mobile") ? "Mobile" : "Desktop";
+
+        // Enforce single active session per user: force-logout any other session still
+        // marked ACTIVE for this username before recording the new one.
+        List<UserSession> priorActive = sessionRepository.findByUsernameIgnoreCaseAndStatus(user.getUsername(), "ACTIVE");
+        if (!priorActive.isEmpty()) {
+            LocalDateTime now = LocalDateTime.now();
+            priorActive.forEach(s -> {
+                s.setStatus("TERMINATED");
+                s.setLogoutTime(now);
+            });
+            sessionRepository.saveAll(priorActive);
+        }
 
         sessionRepository.save(UserSession.builder()
                 .userId(user.getId()).username(user.getUsername())

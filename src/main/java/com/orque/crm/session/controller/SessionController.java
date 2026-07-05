@@ -86,7 +86,13 @@ public class SessionController {
         if (!sessionInScope(session)) {
             return ResponseEntity.status(403).body(Map.of("message", "Access denied."));
         }
-        sessionRepository.delete(session);
+        // Mark TERMINATED rather than delete: JwtAuthenticationFilter only blocks a JWT
+        // when its session row explicitly shows TERMINATED/EXPIRED — deleting the row
+        // makes findByJwtId() come back empty, which the filter treats as "no session
+        // tracked yet" and lets the token through, defeating the whole point of terminate.
+        session.setStatus("TERMINATED");
+        session.setLogoutTime(LocalDateTime.now());
+        sessionRepository.save(session);
         return ResponseEntity.ok(Map.of("success", true, "message", "Session terminated."));
     }
 
@@ -94,11 +100,16 @@ public class SessionController {
     public ResponseEntity<Map<String, Object>> terminateAll() {
         String currentJwt = getCurrentJwt();
         List<UserSession> active = sessionRepository.findByStatus("ACTIVE");
-        List<UserSession> toDelete = active.stream()
+        List<UserSession> toTerminate = active.stream()
                 .filter(s -> !s.getJwtId().equals(currentJwt))
                 .filter(this::sessionInScope)
                 .toList();
-        sessionRepository.deleteAll(toDelete);
+        LocalDateTime now = LocalDateTime.now();
+        toTerminate.forEach(s -> {
+            s.setStatus("TERMINATED");
+            s.setLogoutTime(now);
+        });
+        sessionRepository.saveAll(toTerminate);
         return ResponseEntity.ok(Map.of("success", true, "message",
                 "All other sessions terminated."));
     }
