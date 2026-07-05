@@ -26,6 +26,11 @@ public class CrmDashboard {
     private String layoutConfig; // JSON mapping grid cells and widgets configuration
 
     private String createdBy;
+
+    /** Tenant this dashboard belongs to. Populated automatically by the backend. */
+    @Column(length = 36)
+    private String organizationId;
+
     private LocalDateTime createdAt;
 
     @PrePersist
