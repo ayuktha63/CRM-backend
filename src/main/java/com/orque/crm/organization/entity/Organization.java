@@ -37,6 +37,17 @@ public class Organization {
     private String timezone;
     private String currency;
 
+    // Billing/invoice details — printed on this tenant's own Quote/Invoice PDFs so
+    // each tenant's documents show their own company info instead of Orque's.
+    private String gstin;
+    private String companyTagline;
+    private String bankName;
+    private String bankAccountNumber;
+    private String bankIfsc;
+    private String upiId;
+    private Integer paymentTermsDays;
+    private String lateFeeText;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private OrganizationStatus status;

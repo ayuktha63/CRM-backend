@@ -5,6 +5,8 @@ import com.orque.crm.feature.entity.Invoice;
 import com.orque.crm.feature.entity.Quote;
 import com.orque.crm.feature.repository.InvoiceRepository;
 import com.orque.crm.feature.repository.QuoteRepository;
+import com.orque.crm.organization.entity.Organization;
+import com.orque.crm.organization.repository.OrganizationRepository;
 import com.orque.crm.pdf.PdfGeneratorService;
 import com.orque.crm.settings.service.UserSettingsService;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -30,6 +33,7 @@ public class QuoteController {
 
     private final QuoteRepository quoteRepository;
     private final InvoiceRepository invoiceRepository;
+    private final OrganizationRepository organizationRepository;
     private final PdfGeneratorService pdfGeneratorService;
     private final UserSettingsService userSettingsService;
 
@@ -151,19 +155,22 @@ public class QuoteController {
                 .orElseThrow(() -> new NoSuchElementException(QUOTE_NOT_FOUND));
         UserContextHelper.assertAccess(q.getOrganizationId(), q.getCreatedBy());
 
-        Map<String, String> tokens = Map.ofEntries(
-                Map.entry("quoteNumber", q.getQuoteNumber()),
-                Map.entry("date",        pdfGeneratorService.formatDateTime(q.getCreatedAt())),
-                Map.entry("status",      q.getStatus() != null ? q.getStatus() : STATUS_DRAFT),
-                Map.entry("account",     q.getAccount() != null ? q.getAccount() : "—"),
-                Map.entry("contact",     q.getContact() != null ? q.getContact() : "—"),
-                Map.entry("createdBy",   q.getCreatedBy() != null ? q.getCreatedBy() : "—"),
-                Map.entry("amount",      pdfGeneratorService.formatAmount(q.getAmount())),
-                Map.entry("tax",         pdfGeneratorService.calcTax(q.getAmount())),
-                Map.entry("grandTotal",  pdfGeneratorService.calcGrandTotal(q.getAmount())),
-                Map.entry("validUntil",  pdfGeneratorService.formatDate(q.getValidUntil())),
-                Map.entry("generatedAt", pdfGeneratorService.nowFormatted())
-        );
+        Organization org = q.getOrganizationId() != null
+                ? organizationRepository.findById(q.getOrganizationId()).orElse(null)
+                : null;
+
+        Map<String, String> tokens = new HashMap<>(pdfGeneratorService.companyTokens(org));
+        tokens.put("quoteNumber", q.getQuoteNumber());
+        tokens.put("date",        pdfGeneratorService.formatDateTime(q.getCreatedAt()));
+        tokens.put("status",      q.getStatus() != null ? q.getStatus() : STATUS_DRAFT);
+        tokens.put("account",     q.getAccount() != null ? q.getAccount() : "—");
+        tokens.put("contact",     q.getContact() != null ? q.getContact() : "—");
+        tokens.put("createdBy",   q.getCreatedBy() != null ? q.getCreatedBy() : "—");
+        tokens.put("amount",      pdfGeneratorService.formatAmount(q.getAmount()));
+        tokens.put("tax",         pdfGeneratorService.calcTax(q.getAmount()));
+        tokens.put("grandTotal",  pdfGeneratorService.calcGrandTotal(q.getAmount()));
+        tokens.put("validUntil",  pdfGeneratorService.formatDate(q.getValidUntil()));
+        tokens.put("generatedAt", pdfGeneratorService.nowFormatted());
 
         byte[] pdf = pdfGeneratorService.generate("quote-template.html", tokens);
         return ResponseEntity.ok()

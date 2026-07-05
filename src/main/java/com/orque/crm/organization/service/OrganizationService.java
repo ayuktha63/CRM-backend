@@ -1,5 +1,6 @@
 package com.orque.crm.organization.service;
 
+import com.orque.crm.organization.dto.BillingProfileRequest;
 import com.orque.crm.organization.dto.OrganizationRequest;
 import com.orque.crm.organization.dto.OrganizationResponse;
 
@@ -12,4 +13,8 @@ public interface OrganizationService {
     OrganizationResponse update(String id, OrganizationRequest request);
     void suspend(String id);
     void activate(String id);
+
+    /** Current caller's own tenant billing profile — always self-scoped, never accepts an org id. */
+    OrganizationResponse getMyBillingProfile();
+    OrganizationResponse updateMyBillingProfile(BillingProfileRequest request);
 }

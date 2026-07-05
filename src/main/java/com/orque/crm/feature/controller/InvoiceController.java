@@ -4,6 +4,8 @@ import com.orque.crm.common.UserContextHelper;
 import com.orque.crm.feature.entity.Invoice;
 import com.orque.crm.feature.repository.InvoiceRepository;
 import com.orque.crm.feature.repository.QuoteRepository;
+import com.orque.crm.organization.entity.Organization;
+import com.orque.crm.organization.repository.OrganizationRepository;
 import com.orque.crm.pdf.PdfGeneratorService;
 import com.orque.crm.settings.service.UserSettingsService;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -29,6 +32,7 @@ public class InvoiceController {
 
     private final InvoiceRepository invoiceRepository;
     private final QuoteRepository quoteRepository;
+    private final OrganizationRepository organizationRepository;
     private final PdfGeneratorService pdfGeneratorService;
     private final UserSettingsService userSettingsService;
 
@@ -125,22 +129,24 @@ public class InvoiceController {
                 : "—";
 
         String statusClass = "Paid".equalsIgnoreCase(inv.getStatus()) ? "paid" : "";
+        Organization org = inv.getOrganizationId() != null
+                ? organizationRepository.findById(inv.getOrganizationId()).orElse(null)
+                : null;
 
-        Map<String, String> tokens = Map.ofEntries(
-                Map.entry("invoiceNumber", inv.getInvoiceNumber()),
-                Map.entry("date",          pdfGeneratorService.formatDateTime(inv.getCreatedAt())),
-                Map.entry("dueDate",       pdfGeneratorService.formatDate(inv.getDueDate())),
-                Map.entry("status",        inv.getStatus() != null ? inv.getStatus() : STATUS_DRAFT),
-                Map.entry("statusClass",   statusClass),
-                Map.entry("account",       inv.getAccount()   != null ? inv.getAccount()   : "—"),
-                Map.entry("contact",       inv.getContact()   != null ? inv.getContact()   : "—"),
-                Map.entry("createdBy",     inv.getCreatedBy() != null ? inv.getCreatedBy() : "—"),
-                Map.entry("quoteRef",      quoteRef),
-                Map.entry("amount",        pdfGeneratorService.formatAmount(inv.getAmount())),
-                Map.entry("tax",           pdfGeneratorService.calcTax(inv.getAmount())),
-                Map.entry("grandTotal",    pdfGeneratorService.calcGrandTotal(inv.getAmount())),
-                Map.entry("generatedAt",   pdfGeneratorService.nowFormatted())
-        );
+        Map<String, String> tokens = new HashMap<>(pdfGeneratorService.companyTokens(org));
+        tokens.put("invoiceNumber", inv.getInvoiceNumber());
+        tokens.put("date",          pdfGeneratorService.formatDateTime(inv.getCreatedAt()));
+        tokens.put("dueDate",       pdfGeneratorService.formatDate(inv.getDueDate()));
+        tokens.put("status",        inv.getStatus() != null ? inv.getStatus() : STATUS_DRAFT);
+        tokens.put("statusClass",   statusClass);
+        tokens.put("account",       inv.getAccount()   != null ? inv.getAccount()   : "—");
+        tokens.put("contact",       inv.getContact()   != null ? inv.getContact()   : "—");
+        tokens.put("createdBy",     inv.getCreatedBy() != null ? inv.getCreatedBy() : "—");
+        tokens.put("quoteRef",      quoteRef);
+        tokens.put("amount",        pdfGeneratorService.formatAmount(inv.getAmount()));
+        tokens.put("tax",           pdfGeneratorService.calcTax(inv.getAmount()));
+        tokens.put("grandTotal",    pdfGeneratorService.calcGrandTotal(inv.getAmount()));
+        tokens.put("generatedAt",   pdfGeneratorService.nowFormatted());
 
         byte[] pdf = pdfGeneratorService.generate("invoice-template.html", tokens);
         return ResponseEntity.ok()

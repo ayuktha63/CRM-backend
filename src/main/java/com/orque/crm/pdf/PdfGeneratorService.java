@@ -4,6 +4,7 @@ import com.lowagie.text.Document;
 import com.lowagie.text.PageSize;
 import com.lowagie.text.html.simpleparser.HTMLWorker;
 import com.lowagie.text.pdf.PdfWriter;
+import com.orque.crm.organization.entity.Organization;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
@@ -17,6 +18,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.Map;
 
 @Slf4j
@@ -87,5 +89,40 @@ public class PdfGeneratorService {
 
     public String nowFormatted() {
         return LocalDateTime.now().format(DT_FMT);
+    }
+
+    /**
+     * Tokens for the tenant's own company/billing details, shown as "BILLED FROM"/"FROM"
+     * and "Payment Details" on Quote/Invoice PDFs. Falls back to sensible defaults so a
+     * tenant that hasn't filled in its billing profile yet still gets a usable PDF.
+     */
+    public Map<String, String> companyTokens(Organization org) {
+        Map<String, String> tokens = new HashMap<>();
+        if (org == null) {
+            tokens.put("companyName", "—");
+            tokens.put("companyTagline", "");
+            tokens.put("companyGstin", "—");
+            tokens.put("companyEmail", "—");
+            tokens.put("bankName", "—");
+            tokens.put("bankAccountNumber", "—");
+            tokens.put("bankIfsc", "—");
+            tokens.put("upiId", "—");
+            tokens.put("paymentTermsDays", "30");
+            tokens.put("lateFeeText", "—");
+            return tokens;
+        }
+        String companyName = org.getLegalName() != null && !org.getLegalName().isBlank()
+                ? org.getLegalName() : org.getOrganizationName();
+        tokens.put("companyName", companyName != null ? companyName : "—");
+        tokens.put("companyTagline", org.getCompanyTagline() != null ? org.getCompanyTagline() : "");
+        tokens.put("companyGstin", org.getGstin() != null ? org.getGstin() : "—");
+        tokens.put("companyEmail", org.getEmail() != null ? org.getEmail() : "—");
+        tokens.put("bankName", org.getBankName() != null ? org.getBankName() : "—");
+        tokens.put("bankAccountNumber", org.getBankAccountNumber() != null ? org.getBankAccountNumber() : "—");
+        tokens.put("bankIfsc", org.getBankIfsc() != null ? org.getBankIfsc() : "—");
+        tokens.put("upiId", org.getUpiId() != null ? org.getUpiId() : "—");
+        tokens.put("paymentTermsDays", org.getPaymentTermsDays() != null ? String.valueOf(org.getPaymentTermsDays()) : "30");
+        tokens.put("lateFeeText", org.getLateFeeText() != null ? org.getLateFeeText() : "—");
+        return tokens;
     }
 }

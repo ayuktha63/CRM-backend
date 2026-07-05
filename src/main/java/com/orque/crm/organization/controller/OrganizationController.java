@@ -1,5 +1,6 @@
 package com.orque.crm.organization.controller;
 
+import com.orque.crm.organization.dto.BillingProfileRequest;
 import com.orque.crm.organization.dto.OrganizationRequest;
 import com.orque.crm.organization.dto.OrganizationResponse;
 import com.orque.crm.organization.service.OrganizationService;
@@ -25,6 +26,16 @@ public class OrganizationController {
     @GetMapping
     public ResponseEntity<List<OrganizationResponse>> listAll() {
         return ResponseEntity.ok(organizationService.listAll());
+    }
+
+    @GetMapping("/me/billing-profile")
+    public ResponseEntity<OrganizationResponse> getMyBillingProfile() {
+        return ResponseEntity.ok(organizationService.getMyBillingProfile());
+    }
+
+    @PutMapping("/me/billing-profile")
+    public ResponseEntity<OrganizationResponse> updateMyBillingProfile(@RequestBody BillingProfileRequest request) {
+        return ResponseEntity.ok(organizationService.updateMyBillingProfile(request));
     }
 
     @GetMapping("/{id}")

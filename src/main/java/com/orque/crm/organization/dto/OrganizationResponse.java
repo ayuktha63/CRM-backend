@@ -19,6 +19,14 @@ public class OrganizationResponse {
     private String country;
     private String timezone;
     private String currency;
+    private String gstin;
+    private String companyTagline;
+    private String bankName;
+    private String bankAccountNumber;
+    private String bankIfsc;
+    private String upiId;
+    private Integer paymentTermsDays;
+    private String lateFeeText;
     private OrganizationStatus status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

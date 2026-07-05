@@ -28,10 +28,10 @@
         <tr>
           <td width="33%" valign="top">
             <font size="2" color="#6b7280"><b>BILLED FROM</b></font><br/>
-            <font size="3" color="#0d1b6e"><b>Orque Technologies Pvt. Ltd.</b></font><br/>
-            Enterprise Solutions<br/>
-            GSTIN: 27XXXXX1234X1Z5<br/>
-            contact@orque.io
+            <font size="3" color="#0d1b6e"><b>{{companyName}}</b></font><br/>
+            {{companyTagline}}<br/>
+            GSTIN: {{companyGstin}}<br/>
+            {{companyEmail}}
           </td>
           <td width="33%" valign="top">
             <font size="2" color="#6b7280"><b>BILLED TO</b></font><br/>
@@ -98,8 +98,8 @@
         <tr>
           <td>
             <font size="2" color="#0d1b6e"><b>Payment Details</b></font><br/>
-            Bank: HDFC Bank &nbsp;·&nbsp; A/C: 5020XXXXXXXXXX &nbsp;·&nbsp; IFSC: HDFC0001234<br/>
-            UPI: pay@orque &nbsp;·&nbsp; Reference: {{invoiceNumber}}
+            Bank: {{bankName}} &nbsp;·&nbsp; A/C: {{bankAccountNumber}} &nbsp;·&nbsp; IFSC: {{bankIfsc}}<br/>
+            UPI: {{upiId}} &nbsp;·&nbsp; Reference: {{invoiceNumber}}
           </td>
         </tr>
       </table>
@@ -115,11 +115,11 @@
           </td>
           <td width="33%" valign="top">
             <font size="1" color="#6b7280"><b>PAYMENT TERMS</b></font><br/>
-            <font size="2" color="#1f2937"><b>Net 30 days</b></font>
+            <font size="2" color="#1f2937"><b>Net {{paymentTermsDays}} days</b></font>
           </td>
           <td width="34%" valign="top">
             <font size="1" color="#6b7280"><b>LATE FEE</b></font><br/>
-            <font size="2" color="#1f2937"><b>1.5% per month overdue</b></font>
+            <font size="2" color="#1f2937"><b>{{lateFeeText}}</b></font>
           </td>
         </tr>
       </table>

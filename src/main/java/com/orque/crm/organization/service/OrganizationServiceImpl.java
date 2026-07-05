@@ -4,6 +4,7 @@ import com.orque.crm.auth.repository.UserRepository;
 import com.orque.crm.common.UserContextHelper;
 import com.orque.crm.enums.OrganizationStatus;
 import com.orque.crm.license.repository.CrmLicenseRepository;
+import com.orque.crm.organization.dto.BillingProfileRequest;
 import com.orque.crm.organization.dto.OrganizationRequest;
 import com.orque.crm.organization.dto.OrganizationResponse;
 import com.orque.crm.organization.entity.Organization;
@@ -118,6 +119,45 @@ public class OrganizationServiceImpl implements OrganizationService {
         log.info("Organization activated: {}", id);
     }
 
+    @Override
+    public OrganizationResponse getMyBillingProfile() {
+        String orgId = UserContextHelper.currentOrganizationId();
+        if (orgId == null) {
+            throw new RuntimeException("No organization context for current user.");
+        }
+        Organization org = orgRepository.findById(orgId)
+                .orElseThrow(() -> new NoSuchElementException("Organization not found: " + orgId));
+        return mapToResponse(org, false);
+    }
+
+    @Override
+    public OrganizationResponse updateMyBillingProfile(BillingProfileRequest request) {
+        if (!UserContextHelper.isSystemAdmin()) {
+            throw new RuntimeException("Only the tenant's SYSTEM_ADMIN can update billing details.");
+        }
+        String orgId = UserContextHelper.currentOrganizationId();
+        if (orgId == null) {
+            throw new RuntimeException("No organization context for current user.");
+        }
+        Organization org = orgRepository.findById(orgId)
+                .orElseThrow(() -> new NoSuchElementException("Organization not found: " + orgId));
+
+        org.setLegalName(request.getLegalName());
+        org.setEmail(request.getEmail());
+        org.setPhone(request.getPhone());
+        org.setAddress(request.getAddress());
+        org.setGstin(request.getGstin());
+        org.setCompanyTagline(request.getCompanyTagline());
+        org.setBankName(request.getBankName());
+        org.setBankAccountNumber(request.getBankAccountNumber());
+        org.setBankIfsc(request.getBankIfsc());
+        org.setUpiId(request.getUpiId());
+        org.setPaymentTermsDays(request.getPaymentTermsDays());
+        org.setLateFeeText(request.getLateFeeText());
+
+        return mapToResponse(orgRepository.save(org), false);
+    }
+
     // ──────────────────────────────────────────────────────────────────────────
 
     private OrganizationResponse mapToResponse(Organization org, boolean includeLicense) {
@@ -150,6 +190,14 @@ public class OrganizationServiceImpl implements OrganizationService {
                 .country(org.getCountry())
                 .timezone(org.getTimezone())
                 .currency(org.getCurrency())
+                .gstin(org.getGstin())
+                .companyTagline(org.getCompanyTagline())
+                .bankName(org.getBankName())
+                .bankAccountNumber(org.getBankAccountNumber())
+                .bankIfsc(org.getBankIfsc())
+                .upiId(org.getUpiId())
+                .paymentTermsDays(org.getPaymentTermsDays())
+                .lateFeeText(org.getLateFeeText())
                 .status(org.getStatus())
                 .createdAt(org.getCreatedAt())
                 .updatedAt(org.getUpdatedAt())
