@@ -48,6 +48,18 @@ public class Organization {
     private Integer paymentTermsDays;
     private String lateFeeText;
 
+    // Document numbering — one continuous series per tenant. Must be org-scoped, not
+    // per-user: two sales reps in the same org creating quotes independently must never
+    // both produce "Q-1001".
+    @Builder.Default
+    private String quoteSeriesPrefix = "Q-";
+    @Builder.Default
+    private Integer quoteNextNumber = 1001;
+    @Builder.Default
+    private String invoiceSeriesPrefix = "INV-";
+    @Builder.Default
+    private Integer invoiceNextNumber = 1001;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private OrganizationStatus status;

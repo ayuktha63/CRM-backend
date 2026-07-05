@@ -1,6 +1,12 @@
 package com.orque.crm.settings.service;
 
 import com.orque.crm.common.UserContextHelper;
+import com.orque.crm.feature.entity.Invoice;
+import com.orque.crm.feature.entity.Quote;
+import com.orque.crm.feature.repository.InvoiceRepository;
+import com.orque.crm.feature.repository.QuoteRepository;
+import com.orque.crm.organization.entity.Organization;
+import com.orque.crm.organization.repository.OrganizationRepository;
 import com.orque.crm.settings.dto.UserSettingsDto;
 import com.orque.crm.settings.entity.UserSettings;
 import com.orque.crm.settings.repository.UserSettingsRepository;
@@ -12,12 +18,26 @@ import org.springframework.stereotype.Service;
 public class UserSettingsService {
 
     private final UserSettingsRepository repository;
+    private final OrganizationRepository organizationRepository;
+    private final QuoteRepository quoteRepository;
+    private final InvoiceRepository invoiceRepository;
 
     public UserSettingsDto getForCurrentUser() {
         String username = UserContextHelper.currentUsername();
         UserSettings settings = repository.findByUsername(username)
                 .orElseGet(() -> defaultSettings(username));
-        return toDto(settings);
+        UserSettingsDto dto = toDto(settings);
+        // Document numbering is a tenant-wide policy, not a personal preference — every
+        // user in the org must see (and share) the same series/counter, sourced from
+        // Organization rather than this per-user row.
+        Organization org = currentOrganization();
+        if (org != null) {
+            dto.setQuoteSeriesPrefix(org.getQuoteSeriesPrefix() != null ? org.getQuoteSeriesPrefix() : "Q-");
+            dto.setQuoteNextNumber(org.getQuoteNextNumber() != null ? org.getQuoteNextNumber() : 1001);
+            dto.setInvoiceSeriesPrefix(org.getInvoiceSeriesPrefix() != null ? org.getInvoiceSeriesPrefix() : "INV-");
+            dto.setInvoiceNextNumber(org.getInvoiceNextNumber() != null ? org.getInvoiceNextNumber() : 1001);
+        }
+        return dto;
     }
 
     public UserSettingsDto save(UserSettingsDto dto) {
@@ -26,7 +46,32 @@ public class UserSettingsService {
                 .orElseGet(() -> UserSettings.builder().username(username).build());
 
         applyDto(settings, dto);
-        return toDto(repository.save(settings));
+        UserSettingsDto saved = toDto(repository.save(settings));
+
+        // Numbering fields are org-scoped and SYSTEM_ADMIN-only — silently ignored (not
+        // an error) for any other role, so a business user's unrelated settings (mail,
+        // notifications) still save fine even if their payload echoes back these fields.
+        Organization org = currentOrganization();
+        if (org != null && UserContextHelper.isSystemAdmin()) {
+            boolean changed = false;
+            if (dto.getQuoteSeriesPrefix() != null) { org.setQuoteSeriesPrefix(dto.getQuoteSeriesPrefix()); changed = true; }
+            if (dto.getQuoteNextNumber() != null) { org.setQuoteNextNumber(dto.getQuoteNextNumber()); changed = true; }
+            if (dto.getInvoiceSeriesPrefix() != null) { org.setInvoiceSeriesPrefix(dto.getInvoiceSeriesPrefix()); changed = true; }
+            if (dto.getInvoiceNextNumber() != null) { org.setInvoiceNextNumber(dto.getInvoiceNextNumber()); changed = true; }
+            if (changed) organizationRepository.save(org);
+        }
+        if (org != null) {
+            saved.setQuoteSeriesPrefix(org.getQuoteSeriesPrefix());
+            saved.setQuoteNextNumber(org.getQuoteNextNumber());
+            saved.setInvoiceSeriesPrefix(org.getInvoiceSeriesPrefix());
+            saved.setInvoiceNextNumber(org.getInvoiceNextNumber());
+        }
+        return saved;
+    }
+
+    private Organization currentOrganization() {
+        String orgId = UserContextHelper.currentOrganizationId();
+        return orgId != null ? organizationRepository.findById(orgId).orElse(null) : null;
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
@@ -120,33 +165,75 @@ public class UserSettingsService {
                 .build();
     }
 
+    /**
+     * Org-scoped, not per-user: quote/invoice numbering is one continuous series per
+     * tenant. Keying this by username (the old behavior) meant two sales reps in the
+     * same org each got their own counter — both would produce "Q-1001" as their first
+     * quote, a real numbering collision within a single tenant.
+     */
     public synchronized String getAndIncrementQuoteNumber() {
-        String username = UserContextHelper.currentUsername();
-        UserSettings s = repository.findByUsername(username)
-                .orElseGet(() -> defaultSettings(username));
-        
-        String prefix = s.getQuoteSeriesPrefix() != null ? s.getQuoteSeriesPrefix() : "Q-";
-        int next = s.getQuoteNextNumber() != null ? s.getQuoteNextNumber() : 1001;
-        
-        s.setQuoteSeriesPrefix(prefix);
-        s.setQuoteNextNumber(next + 1);
-        repository.save(s);
-        
+        Organization org = requireCurrentOrganization();
+
+        String prefix = org.getQuoteSeriesPrefix() != null ? org.getQuoteSeriesPrefix() : "Q-";
+        int next = org.getQuoteNextNumber() != null ? org.getQuoteNextNumber() : firstQuoteNumberFor(org, prefix);
+
+        org.setQuoteSeriesPrefix(prefix);
+        org.setQuoteNextNumber(next + 1);
+        organizationRepository.save(org);
+
         return prefix + next;
     }
 
     public synchronized String getAndIncrementInvoiceNumber() {
-        String username = UserContextHelper.currentUsername();
-        UserSettings s = repository.findByUsername(username)
-                .orElseGet(() -> defaultSettings(username));
-        
-        String prefix = s.getInvoiceSeriesPrefix() != null ? s.getInvoiceSeriesPrefix() : "INV-";
-        int next = s.getInvoiceNextNumber() != null ? s.getInvoiceNextNumber() : 1001;
-        
-        s.setInvoiceSeriesPrefix(prefix);
-        s.setInvoiceNextNumber(next + 1);
-        repository.save(s);
-        
+        Organization org = requireCurrentOrganization();
+
+        String prefix = org.getInvoiceSeriesPrefix() != null ? org.getInvoiceSeriesPrefix() : "INV-";
+        int next = org.getInvoiceNextNumber() != null ? org.getInvoiceNextNumber() : firstInvoiceNumberFor(org, prefix);
+
+        org.setInvoiceSeriesPrefix(prefix);
+        org.setInvoiceNextNumber(next + 1);
+        organizationRepository.save(org);
+
         return prefix + next;
+    }
+
+    /**
+     * The counter column is new — every tenant that already has quotes starts with it
+     * NULL. Defaulting straight to 1001 in that case would reissue numbers that already
+     * exist (e.g. a tenant already at Q-1050 would suddenly get a NEW Q-1001, colliding
+     * with their own real Q-1001). Scans existing quotes for this org once, and seeds the
+     * counter one past the highest number actually in use.
+     */
+    private int firstQuoteNumberFor(Organization org, String prefix) {
+        int max = 1000;
+        for (Quote q : quoteRepository.findByOrganizationId(org.getId())) {
+            max = Math.max(max, parseTrailingNumber(q.getQuoteNumber(), prefix));
+        }
+        return max + 1;
+    }
+
+    private int firstInvoiceNumberFor(Organization org, String prefix) {
+        int max = 1000;
+        for (Invoice inv : invoiceRepository.findByOrganizationId(org.getId())) {
+            max = Math.max(max, parseTrailingNumber(inv.getInvoiceNumber(), prefix));
+        }
+        return max + 1;
+    }
+
+    private int parseTrailingNumber(String number, String prefix) {
+        if (number == null || !number.startsWith(prefix)) return 1000;
+        try {
+            return Integer.parseInt(number.substring(prefix.length()));
+        } catch (NumberFormatException e) {
+            return 1000;
+        }
+    }
+
+    private Organization requireCurrentOrganization() {
+        Organization org = currentOrganization();
+        if (org == null) {
+            throw new IllegalStateException("No organization context — cannot generate a document number.");
+        }
+        return org;
     }
 }
