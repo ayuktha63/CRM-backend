@@ -16,6 +16,11 @@ public interface CampaignService {
             Long campaignId
     );
 
+    CampaignResponse updateCampaign(
+            Long campaignId,
+            CreateCampaignRequest request
+    );
+
     CampaignRecipientResponse addRecipient(
             Long campaignId,
             AddRecipientsRequest request

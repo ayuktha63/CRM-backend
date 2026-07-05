@@ -39,6 +39,17 @@ public class CampaignController {
                 campaignService.getCampaign(campaignId)
         );
     }
+
+    @PutMapping("/{campaignId}")
+    public ResponseEntity<CampaignResponse> updateCampaign(
+            @PathVariable Long campaignId,
+            @RequestBody CreateCampaignRequest request
+    ) {
+        return ResponseEntity.ok(
+                campaignService.updateCampaign(campaignId, request)
+        );
+    }
+
     @PostMapping("/{campaignId}/recipients")
     public ResponseEntity<CampaignRecipientResponse> addRecipient(
             @PathVariable Long campaignId,

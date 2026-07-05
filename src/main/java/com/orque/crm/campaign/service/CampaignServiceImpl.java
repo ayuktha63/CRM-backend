@@ -91,6 +91,31 @@ public class CampaignServiceImpl implements CampaignService {
         return mapCampaignToResponse(campaign);
     }
 
+    /**
+     * Campaigns have no owner field — they're tenant-shared like Inventory, so this is
+     * an org-only check (not UserContextHelper.assertAccess, which also enforces an
+     * owner match and would incorrectly block every non-admin user since owner is
+     * always null here).
+     */
+    @Override
+    public CampaignResponse updateCampaign(Long campaignId, CreateCampaignRequest request) {
+        Campaign campaign = campaignRepository.findById(campaignId)
+                .orElseThrow(() -> new RuntimeException("Campaign not found"));
+
+        String myOrg = UserContextHelper.currentOrganizationId();
+        if (myOrg != null && campaign.getOrganizationId() != null && !myOrg.equals(campaign.getOrganizationId())) {
+            throw new RuntimeException("Access denied.");
+        }
+
+        campaign.setCampaignName(request.getCampaignName());
+        campaign.setSubjectLine(request.getSubjectLine());
+        campaign.setEmailBody(request.getEmailBody());
+        campaign.setMailboxId(request.getMailboxId());
+
+        Campaign saved = campaignRepository.save(campaign);
+        return mapCampaignToResponse(saved);
+    }
+
     @Override
     public CampaignRecipientResponse addRecipient(
             Long campaignId,
