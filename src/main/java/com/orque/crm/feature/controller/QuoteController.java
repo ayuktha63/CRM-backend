@@ -162,6 +162,7 @@ public class QuoteController {
     public ResponseEntity<Quote> submit(@PathVariable Long id) {
         Quote existing = quoteRepository.findById(id)
                 .orElseThrow(() -> new NoSuchElementException(QUOTE_NOT_FOUND));
+        UserContextHelper.assertAccess(existing.getOrganizationId(), existing.getCreatedBy());
         existing.setStatus("Sent");
         return ResponseEntity.ok(quoteRepository.save(existing));
     }
@@ -170,6 +171,7 @@ public class QuoteController {
     public ResponseEntity<Quote> approve(@PathVariable Long id) {
         Quote existing = quoteRepository.findById(id)
                 .orElseThrow(() -> new NoSuchElementException(QUOTE_NOT_FOUND));
+        UserContextHelper.assertAccess(existing.getOrganizationId(), existing.getCreatedBy());
         existing.setStatus("Accepted");
         return ResponseEntity.ok(quoteRepository.save(existing));
     }
@@ -178,6 +180,7 @@ public class QuoteController {
     public ResponseEntity<Quote> reject(@PathVariable Long id) {
         Quote existing = quoteRepository.findById(id)
                 .orElseThrow(() -> new NoSuchElementException(QUOTE_NOT_FOUND));
+        UserContextHelper.assertAccess(existing.getOrganizationId(), existing.getCreatedBy());
         existing.setStatus("Rejected");
         return ResponseEntity.ok(quoteRepository.save(existing));
     }
@@ -186,6 +189,7 @@ public class QuoteController {
     public ResponseEntity<Invoice> generateInvoice(@PathVariable Long id) {
         Quote quote = quoteRepository.findById(id)
                 .orElseThrow(() -> new NoSuchElementException(QUOTE_NOT_FOUND));
+        UserContextHelper.assertAccess(quote.getOrganizationId(), quote.getCreatedBy());
 
         if (!"Accepted".equalsIgnoreCase(quote.getStatus())) {
             throw new IllegalStateException("Invoice can only be generated from an Accepted quote");
@@ -195,6 +199,7 @@ public class QuoteController {
 
         Invoice invoice = Invoice.builder()
                 .invoiceNumber(invoiceNumber)
+                .organizationId(quote.getOrganizationId())
                 .contact(quote.getContact())
                 .account(quote.getAccount())
                 .amount(quote.getAmount())

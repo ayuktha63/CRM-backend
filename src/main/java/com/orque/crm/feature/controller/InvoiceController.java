@@ -155,6 +155,7 @@ public class InvoiceController {
     public ResponseEntity<Invoice> submit(@PathVariable Long id) {
         Invoice existing = invoiceRepository.findById(id)
                 .orElseThrow(() -> new NoSuchElementException(INVOICE_NOT_FOUND));
+        UserContextHelper.assertAccess(existing.getCreatedBy());
         existing.setStatus("Sent");
         return ResponseEntity.ok(invoiceRepository.save(existing));
     }
@@ -163,6 +164,7 @@ public class InvoiceController {
     public ResponseEntity<Invoice> approve(@PathVariable Long id) {
         Invoice existing = invoiceRepository.findById(id)
                 .orElseThrow(() -> new NoSuchElementException(INVOICE_NOT_FOUND));
+        UserContextHelper.assertAccess(existing.getCreatedBy());
         existing.setStatus("Paid");
         existing.setPaidDate(LocalDate.now(ZoneId.systemDefault()));
         return ResponseEntity.ok(invoiceRepository.save(existing));
