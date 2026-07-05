@@ -135,7 +135,6 @@ public class LicenseValidationFilter extends OncePerRequestFilter {
         if (path.startsWith("/api/v1/invoices")) return "/invoices";
         if (path.startsWith("/api/v1/reports")) return "/reports";
         if (path.startsWith("/api/v1/report-builder")) return "/report-builder";
-        if (path.startsWith("/api/v1/analytics")) return "/analytics";
         if (path.startsWith("/api/v1/customization")) return "/customization";
         if (path.startsWith("/api/v1/dashboard-builder")) return "/dashboard-builder";
         if (path.startsWith("/api/v1/settings")) return "/settings";

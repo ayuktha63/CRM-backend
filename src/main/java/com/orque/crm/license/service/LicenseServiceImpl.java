@@ -249,7 +249,7 @@ public class LicenseServiceImpl implements LicenseService {
                 .features(java.util.Arrays.asList(
                     "/dashboard", "/leads", "/contacts", "/accounts", "/deals", 
                     "/activities", "/tasks", "/calendar", "/campaigns", "/emails", 
-                    "/products", "/quotes", "/invoices", "/reports", "/analytics", 
+                    "/products", "/quotes", "/invoices", "/reports",
                     "/settings", "/users", "/active-sessions"
                 ))
                 .build();
