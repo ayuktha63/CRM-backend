@@ -21,6 +21,29 @@ public class CrmReportService {
     @PersistenceContext
     private EntityManager entityManager;
 
+    /**
+     * Maps the frontend's lowercase-plural module name to the actual JPA entity name.
+     * Naively capitalizing the module name (old behavior) produced "Contacts", "Leads",
+     * "Deals", "Accounts" etc., none of which match the real (singular) @Entity classes,
+     * so Hibernate rejected every module except "tasks" (the one case that had a manual
+     * override).
+     */
+    private static final Map<String, String> MODULE_ENTITY_MAP = Map.of(
+            "leads", "Lead",
+            "contacts", "Contact",
+            "accounts", "Account",
+            "deals", "Deal",
+            "tasks", "CrmTask",
+            "campaigns", "Campaign",
+            "activities", "Activity"
+    );
+
+    /** Restricts groupBy/column names to safe identifiers before they're concatenated into JPQL. */
+    private static final java.util.regex.Pattern SAFE_IDENTIFIER = java.util.regex.Pattern.compile("^[a-zA-Z0-9_]+$");
+
+    /** Aggregation expressions need a few extra characters (e.g. "COUNT(e.id) AS cnt"). */
+    private static final java.util.regex.Pattern SAFE_AGGREGATION = java.util.regex.Pattern.compile("^[a-zA-Z0-9_,.()\\s*]+$");
+
     public List<CrmReport> getReports() {
         // Return reports shared publicly OR created by current user
         return repository.findByShareTypeIgnoreCaseOrCreatedByIgnoreCase(
@@ -43,55 +66,81 @@ public class CrmReportService {
         CrmReport report = repository.findById(reportId)
                 .orElseThrow(() -> new NoSuchElementException("Report not found"));
 
-        // Build dynamic query
-        StringBuilder sql = new StringBuilder("SELECT ");
-        String primaryTable = report.getModuleName().toLowerCase();
-        
-        List<String> columnsList = new ArrayList<>();
-        
-        // Map columns or aggregates
-        if (report.getGroupBy() != null && !report.getGroupBy().isBlank()) {
-            sql.append("e.").append(report.getGroupBy()).append(", ");
-            columnsList.add(report.getGroupBy());
+        String moduleName = report.getModuleName() == null ? "" : report.getModuleName().toLowerCase().trim();
+        String entityName = MODULE_ENTITY_MAP.get(moduleName);
+        if (entityName == null) {
+            return List.of(errorRow("Unsupported report module: " + report.getModuleName()));
         }
 
-        // Dynamic aggregations mapping
-        if (report.getAggregations() != null && !report.getAggregations().isBlank()) {
-            sql.append(report.getAggregations());
-            // Add aggregate headers
-            String[] aggs = report.getAggregations().split(",");
-            for (String agg : aggs) {
+        String groupBy = report.getGroupBy() != null ? report.getGroupBy().trim() : null;
+        if (groupBy != null && !groupBy.isEmpty() && !SAFE_IDENTIFIER.matcher(groupBy).matches()) {
+            return List.of(errorRow("Invalid group-by field: " + groupBy));
+        }
+
+        List<String> columns = new ArrayList<>();
+        if (report.getColumns() != null && !report.getColumns().isBlank()) {
+            for (String col : report.getColumns().split(",")) {
+                String trimmed = col.trim();
+                if (!trimmed.isEmpty()) columns.add(trimmed);
+            }
+            for (String col : columns) {
+                if (!SAFE_IDENTIFIER.matcher(col).matches()) {
+                    return List.of(errorRow("Invalid column name: " + col));
+                }
+            }
+        }
+
+        String aggregations = report.getAggregations() != null ? report.getAggregations().trim() : null;
+        if (aggregations != null && !aggregations.isEmpty() && !SAFE_AGGREGATION.matcher(aggregations).matches()) {
+            return List.of(errorRow("Invalid aggregation expression"));
+        }
+
+        // Build dynamic query
+        StringBuilder sql = new StringBuilder("SELECT ");
+        List<String> columnsList = new ArrayList<>();
+
+        if (groupBy != null && !groupBy.isEmpty()) {
+            sql.append("e.").append(groupBy).append(", ");
+            columnsList.add(groupBy);
+        }
+
+        if (aggregations != null && !aggregations.isEmpty()) {
+            sql.append(aggregations);
+            for (String agg : aggregations.split(",")) {
                 columnsList.add(agg.trim());
             }
-        } else if (report.getColumns() != null && !report.getColumns().isBlank()) {
-            String[] cols = report.getColumns().split(",");
-            for (int i = 0; i < cols.length; i++) {
+        } else if (!columns.isEmpty()) {
+            for (int i = 0; i < columns.size(); i++) {
                 if (i > 0) sql.append(", ");
-                sql.append("e.").append(cols[i].trim());
-                columnsList.add(cols[i].trim());
+                sql.append("e.").append(columns.get(i));
+                columnsList.add(columns.get(i));
             }
         } else {
             sql.append("e.id");
             columnsList.add("id");
         }
 
-        // JPA query needs mapping from Entity name (uppercase starting)
-        String entityName = primaryTable.substring(0, 1).toUpperCase() + primaryTable.substring(1);
-        if (entityName.equalsIgnoreCase("crm_tasks") || entityName.equalsIgnoreCase("tasks")) {
-            entityName = "CrmTask";
-        }
         sql.append(" FROM ").append(entityName).append(" e");
 
-        // Group by
-        if (report.getGroupBy() != null && !report.getGroupBy().isBlank()) {
-            sql.append(" GROUP BY e.").append(report.getGroupBy());
+        // Tenant isolation — every module entity carries an organizationId; without this
+        // filter the report engine could return every tenant's records to any user.
+        String orgId = UserContextHelper.currentOrganizationId();
+        if (orgId != null) {
+            sql.append(" WHERE e.organizationId = :orgId");
+        }
+
+        if (groupBy != null && !groupBy.isEmpty()) {
+            sql.append(" GROUP BY e.").append(groupBy);
         }
 
         List<Map<String, Object>> results = new ArrayList<>();
         try {
             Query query = entityManager.createQuery(sql.toString());
+            if (orgId != null) {
+                query.setParameter("orgId", orgId);
+            }
             query.setMaxResults(100);
-            
+
             List<Object> rows = query.getResultList();
             for (Object row : rows) {
                 Map<String, Object> map = new LinkedHashMap<>();
@@ -106,11 +155,15 @@ public class CrmReportService {
                 results.add(map);
             }
         } catch (Exception e) {
-            Map<String, Object> error = new LinkedHashMap<>();
-            error.put("error", "Failed to query dynamic report database: " + e.getMessage());
-            results.add(error);
+            results.add(errorRow("Failed to query dynamic report database: " + e.getMessage()));
         }
 
         return results;
+    }
+
+    private Map<String, Object> errorRow(String message) {
+        Map<String, Object> error = new LinkedHashMap<>();
+        error.put("error", message);
+        return error;
     }
 }
