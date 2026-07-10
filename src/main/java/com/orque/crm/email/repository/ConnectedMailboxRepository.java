@@ -12,4 +12,6 @@ public interface ConnectedMailboxRepository
     Optional<ConnectedMailbox> findByEmailAddress(String emailAddress);
 
     List<ConnectedMailbox> findAllByOwnerOrderByConnectedAtDesc(String owner);
+
+    Optional<ConnectedMailbox> findByOwnerIgnoreCase(String owner);
 }
