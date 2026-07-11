@@ -48,10 +48,6 @@ public class AuthServiceImpl implements AuthService {
     private final OrganizationRepository organizationRepository;
     private final LicenseService licenseService;
     private final org.springframework.web.client.RestTemplate restTemplate;
-    private final SystemMailService systemMailService;
-
-    @Value("${crm.app-url}")
-    private String crmAppUrl;
 
     @Override
     public ApiResponse register(RegisterRequest request) {
@@ -510,69 +506,62 @@ public class AuthServiceImpl implements AuthService {
 
     private static final String FORGOT_PASSWORD_GENERIC_MESSAGE =
             "If an account with that email exists, a password reset link has been sent.";
+    private static final String RESET_LINK_INVALID_MESSAGE =
+            "This reset link is invalid or has expired. Please request a new one.";
 
+    /**
+     * OPAC is the single source of truth for identity — login() above never checks CRM's
+     * own password column, it always validates against OPAC. So a password reset must
+     * change the password OPAC actually checks, not CRM's local (unused-at-login) copy.
+     * These three methods proxy straight to OPAC's own forgot/reset-password endpoints,
+     * passing source=crm so OPAC emails a link back to CRM's frontend instead of its own.
+     */
     @Override
     public ApiMessageResponse forgotPassword(ForgotPasswordRequest request) {
-        userRepository.findByEmail(request.getEmail()).ifPresent(user -> {
-            String token = jwtService.generatePasswordResetToken(user.getUsername());
-            String resetLink = crmAppUrl + "/reset-password?token=" + token;
-            String body = "<p>Hello " + user.getUsername() + ",</p>"
-                    + "<p>We received a request to reset your CRM password. Click the link below to choose a new one — "
-                    + "this link expires in 30 minutes.</p>"
-                    + "<p><a href=\"" + resetLink + "\">Reset your password</a></p>"
-                    + "<p>If you didn't request this, you can safely ignore this email.</p>";
-            systemMailService.send(user.getEmail(), "Reset your CRM password", body);
-        });
-
+        try {
+            restTemplate.postForEntity(
+                    opacBaseUrl + "/api/auth/forgot-password",
+                    Map.of("usernameOrEmail", request.getEmail(), "source", "crm"),
+                    Map.class);
+        } catch (Exception e) {
+            log.warn("OPAC forgot-password proxy failed: {}", e.getMessage());
+        }
+        // Generic message regardless of outcome — same reasoning as OPAC's own endpoint:
+        // don't let this response reveal whether the email is registered.
         return new ApiMessageResponse(FORGOT_PASSWORD_GENERIC_MESSAGE);
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public ApiMessageResponse resetPassword(ResetPasswordConfirmRequest request) {
-        String username = jwtService.extractUsernameFromPasswordResetToken(request.getToken());
-        if (username == null) {
-            throw new RuntimeException("This reset token is invalid or has expired. Please request a new password reset link.");
+        try {
+            org.springframework.http.ResponseEntity<Map> resp = restTemplate.postForEntity(
+                    opacBaseUrl + "/api/auth/reset-password",
+                    Map.of("token", request.getToken(), "newPassword", request.getNewPassword()),
+                    Map.class);
+            Map<String, Object> body = resp.getBody();
+            String message = body != null ? String.valueOf(body.get("message")) : null;
+            if (body == null || !Boolean.TRUE.equals(body.get("success"))) {
+                throw new RuntimeException(message != null ? message : RESET_LINK_INVALID_MESSAGE);
+            }
+            return new ApiMessageResponse(message);
+        } catch (org.springframework.web.client.HttpClientErrorException e) {
+            throw new RuntimeException(RESET_LINK_INVALID_MESSAGE);
         }
-
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new RuntimeException("This reset token is invalid or has expired. Please request a new password reset link."));
-
-        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
-        userRepository.save(user);
-
-        return new ApiMessageResponse("Your password has been reset successfully. You can now log in.");
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public Map<String, Object> validateResetToken(String token) {
-        String username = jwtService.extractUsernameFromPasswordResetToken(token);
-        if (username == null) {
-            String reason = jwtService.isPasswordResetTokenExpired(token) ? "expired" : "invalid";
-            return Map.of("valid", false, "reason", reason);
+        try {
+            org.springframework.http.ResponseEntity<Map> resp = restTemplate.getForEntity(
+                    opacBaseUrl + "/api/auth/reset-password/validate?token={token}",
+                    Map.class, token);
+            Map<String, Object> body = resp.getBody();
+            return body != null ? body : Map.of("valid", false, "reason", "invalid");
+        } catch (Exception e) {
+            log.warn("OPAC reset-token validation proxy failed: {}", e.getMessage());
+            return Map.of("valid", false, "reason", "invalid");
         }
-
-        return userRepository.findByUsername(username)
-                .<Map<String, Object>>map(user -> {
-                    String tenantName = "";
-                    if (user.getOrganizationId() != null && !user.getOrganizationId().isBlank()) {
-                        tenantName = organizationRepository.findById(user.getOrganizationId())
-                                .map(Organization::getOrganizationName).orElse("");
-                    }
-                    Map<String, Object> res = new java.util.HashMap<>();
-                    res.put("valid", true);
-                    res.put("username", user.getUsername());
-                    res.put("tenantName", tenantName);
-                    res.put("maskedEmail", maskEmail(user.getEmail()));
-                    return res;
-                })
-                .orElse(Map.of("valid", false, "reason", "invalid"));
-    }
-
-    private String maskEmail(String email) {
-        if (email == null || !email.contains("@")) return "your account";
-        String[] parts = email.split("@", 2);
-        String local = parts[0];
-        String visible = local.length() <= 2 ? local.substring(0, 1) : local.substring(0, 2);
-        return visible + "***@" + parts[1];
     }
 }

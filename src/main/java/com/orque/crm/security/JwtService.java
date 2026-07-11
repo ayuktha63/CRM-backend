@@ -76,48 +76,6 @@ public class JwtService {
         }
     }
 
-    private static final String RESET_PURPOSE = "password_reset";
-
-    /** Short-lived signed token emailed as the password-reset link's ?token= param. */
-    public String generatePasswordResetToken(String username) {
-        Date now = new Date();
-        SecretKey key = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
-        return Jwts.builder()
-                .subject(username)
-                .claim("purpose", RESET_PURPOSE)
-                .issuedAt(now)
-                .expiration(new Date(now.getTime() + 1_800_000L)) // 30 minutes
-                .signWith(key)
-                .compact();
-    }
-
-    /** Verifies and decodes a password-reset token; returns the username, or null if invalid/expired/wrong purpose. */
-    public String extractUsernameFromPasswordResetToken(String token) {
-        try {
-            Claims claims = extractAllClaims(token);
-            if (claims.getExpiration().before(new Date())) return null;
-            if (!RESET_PURPOSE.equals(claims.get("purpose", String.class))) return null;
-            return claims.getSubject();
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    /**
-     * True only for a correctly-signed reset token that has merely run past its 30-minute
-     * window — lets the UI say "link expired" instead of the generic "invalid link".
-     */
-    public boolean isPasswordResetTokenExpired(String token) {
-        try {
-            extractAllClaims(token);
-            return false; // parsed fine — not expired
-        } catch (io.jsonwebtoken.ExpiredJwtException e) {
-            return RESET_PURPOSE.equals(e.getClaims().get("purpose", String.class));
-        } catch (Exception e) {
-            return false; // malformed/forged — invalid, not expired
-        }
-    }
-
     public boolean isTokenValid(String token, User user) {
         String username = extractUsername(token);
 
