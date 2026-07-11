@@ -93,4 +93,24 @@ public class AuthController {
 
         return ResponseEntity.ok(response);
     }
+
+    /** Lets the reset-password screen show whose account is about to change, before submit. */
+    @GetMapping("/reset-password/validate")
+    public ResponseEntity<Map<String, Object>> validateResetToken(@RequestParam("token") String token) {
+        return ResponseEntity.ok(authService.validateResetToken(token));
+    }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<ApiMessageResponse> forgotPassword(
+            @Valid @RequestBody ForgotPasswordRequest request
+    ) {
+        return ResponseEntity.ok(authService.forgotPassword(request));
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<ApiMessageResponse> resetPassword(
+            @Valid @RequestBody ResetPasswordConfirmRequest request
+    ) {
+        return ResponseEntity.ok(authService.resetPassword(request));
+    }
 }
