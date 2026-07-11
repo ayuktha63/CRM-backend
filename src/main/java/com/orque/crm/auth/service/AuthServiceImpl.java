@@ -503,4 +503,65 @@ public class AuthServiceImpl implements AuthService {
 
         return new ApiMessageResponse("Logged out successfully");
     }
+
+    private static final String FORGOT_PASSWORD_GENERIC_MESSAGE =
+            "If an account with that email exists, a password reset link has been sent.";
+    private static final String RESET_LINK_INVALID_MESSAGE =
+            "This reset link is invalid or has expired. Please request a new one.";
+
+    /**
+     * OPAC is the single source of truth for identity — login() above never checks CRM's
+     * own password column, it always validates against OPAC. So a password reset must
+     * change the password OPAC actually checks, not CRM's local (unused-at-login) copy.
+     * These three methods proxy straight to OPAC's own forgot/reset-password endpoints,
+     * passing source=crm so OPAC emails a link back to CRM's frontend instead of its own.
+     */
+    @Override
+    public ApiMessageResponse forgotPassword(ForgotPasswordRequest request) {
+        try {
+            restTemplate.postForEntity(
+                    opacBaseUrl + "/api/auth/forgot-password",
+                    Map.of("usernameOrEmail", request.getEmail(), "source", "crm"),
+                    Map.class);
+        } catch (Exception e) {
+            log.warn("OPAC forgot-password proxy failed: {}", e.getMessage());
+        }
+        // Generic message regardless of outcome — same reasoning as OPAC's own endpoint:
+        // don't let this response reveal whether the email is registered.
+        return new ApiMessageResponse(FORGOT_PASSWORD_GENERIC_MESSAGE);
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public ApiMessageResponse resetPassword(ResetPasswordConfirmRequest request) {
+        try {
+            org.springframework.http.ResponseEntity<Map> resp = restTemplate.postForEntity(
+                    opacBaseUrl + "/api/auth/reset-password",
+                    Map.of("token", request.getToken(), "newPassword", request.getNewPassword()),
+                    Map.class);
+            Map<String, Object> body = resp.getBody();
+            String message = body != null ? String.valueOf(body.get("message")) : null;
+            if (body == null || !Boolean.TRUE.equals(body.get("success"))) {
+                throw new RuntimeException(message != null ? message : RESET_LINK_INVALID_MESSAGE);
+            }
+            return new ApiMessageResponse(message);
+        } catch (org.springframework.web.client.HttpClientErrorException e) {
+            throw new RuntimeException(RESET_LINK_INVALID_MESSAGE);
+        }
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> validateResetToken(String token) {
+        try {
+            org.springframework.http.ResponseEntity<Map> resp = restTemplate.getForEntity(
+                    opacBaseUrl + "/api/auth/reset-password/validate?token={token}",
+                    Map.class, token);
+            Map<String, Object> body = resp.getBody();
+            return body != null ? body : Map.of("valid", false, "reason", "invalid");
+        } catch (Exception e) {
+            log.warn("OPAC reset-token validation proxy failed: {}", e.getMessage());
+            return Map.of("valid", false, "reason", "invalid");
+        }
+    }
 }
