@@ -25,8 +25,11 @@ public class AuthResponse {
 
     private String role;
 
-    /** Non-null when the org license is in grace period. Shown as a banner in the UI. */
+    /** Non-null when the org license is in grace period. Shown as a popup on every login. */
     private String licenseWarning;
+
+    /** Days of grace remaining when licenseWarning is set — lets the frontend render "X days" without re-parsing the message. */
+    private Integer graceRemainingDays;
 
     /** Feature routes from the OPAC policy that was active at SSO time. Stored as accesspolicy in localStorage. */
     private java.util.List<String> accessPolicy;

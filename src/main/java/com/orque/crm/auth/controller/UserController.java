@@ -12,8 +12,10 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -29,6 +31,13 @@ public class UserController {
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final CrmLicenseRepository licenseRepository;
+    private final RestTemplate restTemplate;
+
+    @Value("${opac.base-url}")
+    private String opacBaseUrl;
+
+    @Value("${internal.service-api-key:}")
+    private String internalServiceApiKey;
 
     // ── List ──────────────────────────────────────────────────────────────
     @GetMapping
@@ -141,6 +150,20 @@ public class UserController {
         if (!UserContextHelper.canAccess(user.getOrganizationId(), user.getUsername())) {
             return ResponseEntity.status(403).body(Map.of("message", "Access denied."));
         }
+
+        // OPAC is the actual login source of truth (CRM's own password column is never
+        // checked at login), so the real reset must land there first.
+        try {
+            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+            headers.set("X-Internal-Api-Key", internalServiceApiKey);
+            org.springframework.http.HttpEntity<Map<String, String>> entity = new org.springframework.http.HttpEntity<>(
+                    Map.of("username", user.getUsername(), "newPassword", req.getNewPassword()), headers);
+            restTemplate.postForEntity(opacBaseUrl + "/api/admin/users/reset-password", entity, Map.class);
+        } catch (Exception e) {
+            return ResponseEntity.status(502).body(Map.of("message", "Failed to reset password in OPAC: " + e.getMessage()));
+        }
+
         user.setPassword(passwordEncoder.encode(req.getNewPassword()));
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
