@@ -145,6 +145,7 @@ public class AuthServiceImpl implements AuthService {
 
         // Org + license checks (skipped for users without an org assignment)
         String licenseWarning = null;
+        Integer graceRemainingDays = null;
         String orgId = user.getOrganizationId();
         if (orgId != null && !orgId.isBlank()) {
             Organization org = organizationRepository.findById(orgId).orElse(null);
@@ -152,8 +153,18 @@ public class AuthServiceImpl implements AuthService {
                 throw new RuntimeException("Your organization account has been suspended. Contact support.");
             }
             LicenseService.LicenseCheckResult licResult = licenseService.check(orgId);
-            if (licResult.allowed() && licResult.inGrace()) {
-                licenseWarning = "License in grace period. " + licResult.graceRemaining() + " day(s) remaining.";
+            // Grace period exhausted (or license was never active): block login entirely,
+            // same as OPAC's own restriction screen — a valid JWT must never be issued for
+            // an org whose license has fully lapsed, regardless of which app the user
+            // enters through.
+            if (!licResult.allowed()) {
+                throw new RuntimeException(licResult.message() != null
+                        ? licResult.message() : "Your organization's license has expired. Contact your system admin.");
+            }
+            if (licResult.inGrace()) {
+                graceRemainingDays = licResult.graceRemaining();
+                licenseWarning = "Your organization's license will expire in "
+                        + licResult.graceRemaining() + " day(s). Please renew to avoid losing access.";
             }
         }
 
@@ -206,6 +217,7 @@ public class AuthServiceImpl implements AuthService {
                 .tenantName(tenantName)
                 .organizationId(user.getOrganizationId())
                 .licenseWarning(licenseWarning)
+                .graceRemainingDays(graceRemainingDays)
                 .build();
     }
 
@@ -416,6 +428,30 @@ public class AuthServiceImpl implements AuthService {
                 throw new RuntimeException("User account is disabled");
             }
 
+            // Same license enforcement as direct login: OPAC's own SSO handoff normally
+            // blocks before ever reaching this method, but this method must not be the
+            // weaker path if it's ever hit directly — grace still allows entry with a
+            // warning, fully-lapsed licenses block here too.
+            String licenseWarning = null;
+            Integer graceRemainingDays = null;
+            String ssoOrgId = user.getOrganizationId();
+            if (ssoOrgId != null && !ssoOrgId.isBlank()) {
+                Organization org = organizationRepository.findById(ssoOrgId).orElse(null);
+                if (org != null && org.getStatus() == OrganizationStatus.SUSPENDED) {
+                    throw new RuntimeException("Your organization account has been suspended. Contact support.");
+                }
+                LicenseService.LicenseCheckResult licResult = licenseService.check(ssoOrgId);
+                if (!licResult.allowed()) {
+                    throw new RuntimeException(licResult.message() != null
+                            ? licResult.message() : "Your organization's license has expired. Contact your system admin.");
+                }
+                if (licResult.inGrace()) {
+                    graceRemainingDays = licResult.graceRemaining();
+                    licenseWarning = "Your organization's license will expire in "
+                            + licResult.graceRemaining() + " day(s). Please renew to avoid losing access.";
+                }
+            }
+
             String accessToken  = jwtService.generateAccessToken(user);
             String refreshToken = jwtService.generateRefreshToken(user);
 
@@ -432,6 +468,9 @@ public class AuthServiceImpl implements AuthService {
                 .role(user.getRole().getName().name())
                 .accessPolicy(features)
                 .tenantName(tenantName)
+                .organizationId(user.getOrganizationId())
+                .licenseWarning(licenseWarning)
+                .graceRemainingDays(graceRemainingDays)
                 .build();
         } catch (RuntimeException e) {
             throw e;
