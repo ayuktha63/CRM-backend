@@ -462,14 +462,44 @@ public class LeadServiceImpl implements LeadService {
         Lead lead = leadRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Lead not found: " + id));
 
+        if (lead.getStatus() == LeadStatus.CONVERTED) {
+            throw new RuntimeException("Lead has already been converted.");
+        }
+
+        LeadStatus previousStatus = lead.getStatus();
         lead.setStatus(LeadStatus.QUALIFIED);
         lead.setUpdatedAt(LocalDateTime.now());
         Lead saved = leadRepository.save(lead);
 
         createLeadActivity(saved.getId(), LeadActivityType.STATUS_CHANGED, "Lead promoted to QUALIFIED");
         auditLogService.createAudit(AuditAction.LEAD_STATUS_CHANGED, AuditModule.LEAD, "Lead",
-                saved.getId(), LeadStatus.NEW.name(), LeadStatus.QUALIFIED.name(),
+                saved.getId(), previousStatus.name(), LeadStatus.QUALIFIED.name(),
                 "Lead status changed to QUALIFIED", saved.getAssignedOwner(), null);
+        return mapToLeadResponse(saved);
+    }
+
+    @Override
+    @Transactional
+    public LeadResponse disqualifyLead(Long id) {
+        Lead lead = leadRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Lead not found: " + id));
+
+        if (lead.getStatus() == LeadStatus.CONVERTED) {
+            throw new RuntimeException("Converted leads cannot be disqualified.");
+        }
+        if (lead.getStatus() == LeadStatus.DISQUALIFIED) {
+            throw new RuntimeException("Lead is already disqualified.");
+        }
+
+        LeadStatus previousStatus = lead.getStatus();
+        lead.setStatus(LeadStatus.DISQUALIFIED);
+        lead.setUpdatedAt(LocalDateTime.now());
+        Lead saved = leadRepository.save(lead);
+
+        createLeadActivity(saved.getId(), LeadActivityType.STATUS_CHANGED, "Lead marked as DISQUALIFIED");
+        auditLogService.createAudit(AuditAction.LEAD_STATUS_CHANGED, AuditModule.LEAD, "Lead",
+                saved.getId(), previousStatus.name(), LeadStatus.DISQUALIFIED.name(),
+                "Lead status changed to DISQUALIFIED", saved.getAssignedOwner(), null);
         return mapToLeadResponse(saved);
     }
 

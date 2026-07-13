@@ -29,6 +29,8 @@ public interface LeadService {
 
     LeadResponse promoteToQualified(Long id);
 
+    LeadResponse disqualifyLead(Long id);
+
     java.util.List<LeadResponse> bulkImportLeads(java.util.List<CreateLeadRequest> requests);
 
     void deleteLead(Long id);
