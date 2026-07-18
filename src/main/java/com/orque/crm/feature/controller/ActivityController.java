@@ -30,17 +30,24 @@ public class ActivityController {
     private final AccountRepository accountRepository;
     private final TimelineService timelineService;
 
+    /**
+     * @param assignedTo Optional — lets an admin filter to a specific salesperson's activities
+     *                   (e.g. the Dashboard's "View as" picker). Ignored for non-admins, who
+     *                   are always self-scoped regardless of what's passed here.
+     */
     @GetMapping
-    public ResponseEntity<List<Activity>> getAll() {
+    public ResponseEntity<List<Activity>> getAll(@RequestParam(required = false) String assignedTo) {
         String orgId = com.orque.crm.common.UserContextHelper.scopedOrgId();
         String owner = com.orque.crm.common.UserContextHelper.scopedOwner();
         List<Activity> activities;
         if (orgId == null) {
             activities = activityRepository.findAll();
-        } else if (owner == null) {
-            activities = activityRepository.findByOrganizationId(orgId);
-        } else {
+        } else if (owner != null) {
             activities = activityRepository.findByOrganizationIdAndAssignedTo(orgId, owner);
+        } else if (assignedTo != null && !assignedTo.isBlank()) {
+            activities = activityRepository.findByOrganizationIdAndAssignedTo(orgId, assignedTo);
+        } else {
+            activities = activityRepository.findByOrganizationId(orgId);
         }
         return ResponseEntity.ok(activities);
     }
