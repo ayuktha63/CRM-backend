@@ -44,8 +44,13 @@ public class CrmDashboardService {
     }
 
     public CrmDashboard getDashboard(Long id) {
-        return repository.findById(id)
+        CrmDashboard dashboard = repository.findById(id)
                 .orElseThrow(() -> new NoSuchElementException("Dashboard not found"));
+        String myOrg = UserContextHelper.currentOrganizationId();
+        if (myOrg != null && dashboard.getOrganizationId() != null && !myOrg.equals(dashboard.getOrganizationId())) {
+            throw new NoSuchElementException("Dashboard not found");
+        }
+        return dashboard;
     }
 
     @Transactional
@@ -71,6 +76,12 @@ public class CrmDashboardService {
 
     @Transactional
     public void deleteDashboard(Long id) {
+        CrmDashboard existing = repository.findById(id)
+                .orElseThrow(() -> new NoSuchElementException("Dashboard not found"));
+        String myOrg = UserContextHelper.currentOrganizationId();
+        if (myOrg != null && existing.getOrganizationId() != null && !myOrg.equals(existing.getOrganizationId())) {
+            throw new RuntimeException("Access denied.");
+        }
         repository.deleteById(id);
     }
 }
