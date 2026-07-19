@@ -113,6 +113,11 @@ public class LeadController {
         return leadService.qualifyLead(id);
     }
 
+    @PostMapping("/disqualify/{id}")
+    public LeadResponse disqualifyLead(@PathVariable Long id) {
+        return leadService.disqualifyLead(id);
+    }
+
     @PostMapping("/bulk-import")
     public List<LeadResponse> bulkImportLeads(@RequestBody List<CreateLeadRequest> requests) {
         String owner = UserContextHelper.currentUsername();

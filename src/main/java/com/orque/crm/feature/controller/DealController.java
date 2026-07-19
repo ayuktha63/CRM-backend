@@ -35,17 +35,27 @@ public class DealController {
     private final CrmTaskRepository taskRepository;
     private final UserSettingsService userSettingsService;
 
+    /**
+     * @param assignedTo Optional — lets an admin filter to a specific salesperson's deals
+     *                   (e.g. the Dashboard's "View as" picker). Ignored for non-admins,
+     *                   who are always self-scoped via {@link UserContextHelper#scopedOwner()}
+     *                   regardless of what's passed here, so a sales rep can never use this
+     *                   to view a teammate's deals.
+     */
     @GetMapping
-    public ResponseEntity<List<Deal>> getAll() {
+    public ResponseEntity<List<Deal>> getAll(@RequestParam(required = false) String assignedTo) {
         String orgId = UserContextHelper.scopedOrgId();
         String owner = UserContextHelper.scopedOwner();
         if (orgId == null) {
             return ResponseEntity.ok(dealRepository.findAll());
         }
-        if (owner == null) {
-            return ResponseEntity.ok(dealRepository.findByOrganizationId(orgId));
+        if (owner != null) {
+            return ResponseEntity.ok(dealRepository.findByOrganizationIdAndAssignedTo(orgId, owner));
         }
-        return ResponseEntity.ok(dealRepository.findByOrganizationIdAndAssignedTo(orgId, owner));
+        if (assignedTo != null && !assignedTo.isBlank()) {
+            return ResponseEntity.ok(dealRepository.findByOrganizationIdAndAssignedTo(orgId, assignedTo));
+        }
+        return ResponseEntity.ok(dealRepository.findByOrganizationId(orgId));
     }
 
     @GetMapping("/{id}")
