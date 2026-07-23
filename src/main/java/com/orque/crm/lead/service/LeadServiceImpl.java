@@ -55,6 +55,15 @@ public class LeadServiceImpl implements LeadService {
             throw new RuntimeException("Lead with this email already exists");
         }
 
+        return saveLead(request);
+    }
+
+    /**
+     * Builds and saves a lead without the duplicate-email check.
+     * Used by bulk import, where duplicate emails are allowed; regular
+     * single-lead creation goes through {@link #createLead} instead.
+     */
+    private LeadResponse saveLead(CreateLeadRequest request) {
         Lead lead = Lead.builder()
                 .contactId(null)
                 .fullName(request.getFullName())
@@ -512,19 +521,21 @@ public class LeadServiceImpl implements LeadService {
             if (req.getFullName() == null || req.getFullName().isBlank()) {
                 req.setFullName("Nil");
             }
-            if (req.getEmail() == null || req.getEmail().isBlank() || leadRepository.existsByEmail(req.getEmail())) {
+            if (req.getEmail() == null || req.getEmail().isBlank()) {
                 req.setEmail(generatePlaceholderEmail(rowIndex));
             }
-            try { imported.add(createLead(req)); } catch (RuntimeException ignored) { /* skip on unexpected failure */ }
+            try { imported.add(saveLead(req)); } catch (RuntimeException ignored) { /* skip on unexpected failure */ }
         }
         return imported;
     }
 
     private String generatePlaceholderEmail(int rowIndex) {
-        String candidate;
-        do {
-            candidate = "invalid.email+" + rowIndex + "-" + java.util.UUID.randomUUID().toString().substring(0, 8) + "@invalid.email";
-        } while (leadRepository.existsByEmail(candidate));
+        String candidate = "invalid.email" + rowIndex + "@invalid.email";
+        int attempt = rowIndex;
+        while (leadRepository.existsByEmail(candidate)) {
+            attempt++;
+            candidate = "invalid.email" + attempt + "@invalid.email";
+        }
         return candidate;
     }
 
