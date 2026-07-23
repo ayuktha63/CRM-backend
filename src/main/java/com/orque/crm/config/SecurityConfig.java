@@ -42,6 +42,7 @@ public class SecurityConfig {
                                 "/api/v1/auth/**",
                                 "/api/v1/google/oauth/**",
                                 "/api/v1/calendar/google/oauth/callback",
+                                "/api/v1/sessions/resume",
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**"
                         ).permitAll()

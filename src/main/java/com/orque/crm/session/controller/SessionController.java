@@ -3,9 +3,11 @@ package com.orque.crm.session.controller;
 import com.orque.crm.auth.entity.User;
 import com.orque.crm.auth.repository.UserRepository;
 import com.orque.crm.common.UserContextHelper;
+import com.orque.crm.security.JwtService;
 import com.orque.crm.session.dto.SessionResponse;
 import com.orque.crm.session.entity.UserSession;
 import com.orque.crm.session.repository.UserSessionRepository;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -24,6 +26,7 @@ public class SessionController {
 
     private final UserSessionRepository sessionRepository;
     private final UserRepository userRepository;
+    private final JwtService jwtService;
 
     @GetMapping
     public ResponseEntity<List<SessionResponse>> getAllSessions() {
@@ -112,6 +115,39 @@ public class SessionController {
         sessionRepository.saveAll(toTerminate);
         return ResponseEntity.ok(Map.of("success", true, "message",
                 "All other sessions terminated."));
+    }
+
+    /**
+     * Lets a client "continue" a session that was just TERMINATED (by an admin) or
+     * EXPIRED (by inactivity) without forcing an immediate logout — used by the frontend's
+     * grace-period popup shown on any 401. Deliberately permitAll'd (see SecurityConfig):
+     * the normal auth filter already refuses to authenticate a request carrying a
+     * TERMINATED/EXPIRED session's JWT, so this endpoint has to validate the token's
+     * signature/expiry itself, independent of the blocked session row, before flipping
+     * it back to ACTIVE.
+     */
+    @PostMapping("/resume")
+    public ResponseEntity<Map<String, Object>> resumeSession(HttpServletRequest request) {
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            return ResponseEntity.status(401).body(Map.of("success", false, "message", "No token provided."));
+        }
+        String jwt = authHeader.substring(7).trim();
+
+        if (!jwtService.isTokenSignatureValid(jwt)) {
+            return ResponseEntity.status(401).body(Map.of("success", false, "message", "Session has expired. Please log in again."));
+        }
+
+        sessionRepository.findByJwtId(jwt).ifPresent(session -> {
+            if ("TERMINATED".equals(session.getStatus()) || "EXPIRED".equals(session.getStatus())) {
+                session.setStatus("ACTIVE");
+                session.setLogoutTime(null);
+                session.setLastActivity(LocalDateTime.now());
+                sessionRepository.save(session);
+            }
+        });
+
+        return ResponseEntity.ok(Map.of("success", true, "message", "Session resumed."));
     }
 
     private String getCurrentJwt() {
