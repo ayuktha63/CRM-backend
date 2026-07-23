@@ -12,10 +12,16 @@ import com.orque.crm.feature.repository.QuoteRepository;
 import com.orque.crm.task.entity.CrmTask;
 import com.orque.crm.task.repository.CrmTaskRepository;
 import com.orque.crm.settings.service.UserSettingsService;
+import com.orque.crm.tax.dto.TaxBreakdown;
+import com.orque.crm.tax.entity.OrganizationTaxSettings;
+import com.orque.crm.tax.service.OrganizationTaxSettingsService;
+import com.orque.crm.tax.service.TaxCalculationService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -34,6 +40,9 @@ public class DealController {
     private final ActivityRepository activityRepository;
     private final CrmTaskRepository taskRepository;
     private final UserSettingsService userSettingsService;
+    private final OrganizationTaxSettingsService taxSettingsService;
+    private final TaxCalculationService taxCalculationService;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
      * @param assignedTo Optional — lets an admin filter to a specific salesperson's deals
@@ -163,16 +172,36 @@ public class DealController {
 
         String currentUser = UserContextHelper.currentUsername();
         String quoteNumber = userSettingsService.getAndIncrementQuoteNumber();
+        BigDecimal amount = deal.getAmount() != null ? deal.getAmount() : BigDecimal.ZERO;
+
+        // A Deal has no line items to derive a subtotal from, but tax still must be
+        // calculated against the org's actual GST/VAT configuration here — previously
+        // this quote was saved with taxSystem/taxBreakdownJson left null, which made the
+        // PDF fall back to a hardcoded flat 18% GST row regardless of the org's real
+        // tax regime (see QuoteController/InvoiceController.applyTaxAndAmount for the
+        // same fix on the normal creation path).
+        OrganizationTaxSettings settings = taxSettingsService.findForOrg(deal.getOrganizationId());
+        TaxBreakdown breakdown = taxCalculationService.calculate(settings, null, amount);
+        String taxBreakdownJson;
+        try {
+            taxBreakdownJson = objectMapper.writeValueAsString(breakdown.getTaxes());
+        } catch (Exception e) {
+            taxBreakdownJson = null;
+        }
 
         Quote quote = Quote.builder()
                 .quoteNumber(quoteNumber)
                 .contact(deal.getContact())
                 .account(deal.getAccount())
-                .amount(deal.getAmount())
+                .amount(amount)
                 .dealId(id)
                 .createdBy(currentUser)
                 .status("Draft")
                 .organizationId(deal.getOrganizationId())
+                .taxSystem(breakdown.getTaxSystem())
+                .totalTax(breakdown.getTotalTax())
+                .grandTotal(breakdown.getGrandTotal())
+                .taxBreakdownJson(taxBreakdownJson)
                 .build();
 
         return ResponseEntity.ok(quoteRepository.save(quote));

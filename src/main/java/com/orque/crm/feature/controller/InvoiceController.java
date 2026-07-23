@@ -128,16 +128,25 @@ public class InvoiceController {
     /** Mirrors QuoteController's applyTaxAndAmount — see there for the full rationale. */
     private void applyTaxAndAmount(Invoice invoice, String organizationId) {
         List<LineItem> items = invoice.getLineItems();
-        if (items == null || items.isEmpty()) return;
-        BigDecimal subtotal = BigDecimal.ZERO;
-        for (LineItem item : items) {
-            int qty = item.getQuantity() != null ? item.getQuantity() : 0;
-            BigDecimal unitPrice = item.getUnitPrice() != null ? item.getUnitPrice() : BigDecimal.ZERO;
-            BigDecimal lineTotal = unitPrice.multiply(BigDecimal.valueOf(qty));
-            item.setLineTotal(lineTotal);
-            subtotal = subtotal.add(lineTotal);
+        BigDecimal subtotal;
+        if (items == null || items.isEmpty()) {
+            // No line items (e.g. an invoice generated from a Deal-created quote that
+            // never had line items) — still run tax calculation against the flat amount
+            // instead of skipping it entirely, which used to leave taxSystem/
+            // taxBreakdownJson null and made the PDF fall back to a hardcoded flat GST
+            // row regardless of the org's actual VAT/GST configuration.
+            subtotal = invoice.getAmount() != null ? invoice.getAmount() : BigDecimal.ZERO;
+        } else {
+            subtotal = BigDecimal.ZERO;
+            for (LineItem item : items) {
+                int qty = item.getQuantity() != null ? item.getQuantity() : 0;
+                BigDecimal unitPrice = item.getUnitPrice() != null ? item.getUnitPrice() : BigDecimal.ZERO;
+                BigDecimal lineTotal = unitPrice.multiply(BigDecimal.valueOf(qty));
+                item.setLineTotal(lineTotal);
+                subtotal = subtotal.add(lineTotal);
+            }
+            invoice.setAmount(subtotal);
         }
-        invoice.setAmount(subtotal);
 
         OrganizationTaxSettings settings = taxSettingsService.findForOrg(organizationId);
         TaxBreakdown breakdown = taxCalculationService.calculate(settings, invoice.getCustomerState(), subtotal);

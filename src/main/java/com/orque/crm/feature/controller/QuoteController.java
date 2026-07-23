@@ -135,16 +135,24 @@ public class QuoteController {
      */
     private void applyTaxAndAmount(Quote quote, String organizationId) {
         List<LineItem> items = quote.getLineItems();
-        if (items == null || items.isEmpty()) return;
-        BigDecimal subtotal = BigDecimal.ZERO;
-        for (LineItem item : items) {
-            int qty = item.getQuantity() != null ? item.getQuantity() : 0;
-            BigDecimal unitPrice = item.getUnitPrice() != null ? item.getUnitPrice() : BigDecimal.ZERO;
-            BigDecimal lineTotal = unitPrice.multiply(BigDecimal.valueOf(qty));
-            item.setLineTotal(lineTotal);
-            subtotal = subtotal.add(lineTotal);
+        BigDecimal subtotal;
+        if (items == null || items.isEmpty()) {
+            // No line items (e.g. a quote created directly from a Deal) — still run tax
+            // calculation against the flat amount instead of skipping it entirely, which
+            // used to leave taxSystem/taxBreakdownJson null and made the PDF fall back to
+            // a hardcoded flat GST row regardless of the org's actual VAT/GST configuration.
+            subtotal = quote.getAmount() != null ? quote.getAmount() : BigDecimal.ZERO;
+        } else {
+            subtotal = BigDecimal.ZERO;
+            for (LineItem item : items) {
+                int qty = item.getQuantity() != null ? item.getQuantity() : 0;
+                BigDecimal unitPrice = item.getUnitPrice() != null ? item.getUnitPrice() : BigDecimal.ZERO;
+                BigDecimal lineTotal = unitPrice.multiply(BigDecimal.valueOf(qty));
+                item.setLineTotal(lineTotal);
+                subtotal = subtotal.add(lineTotal);
+            }
+            quote.setAmount(subtotal);
         }
-        quote.setAmount(subtotal);
 
         OrganizationTaxSettings settings = taxSettingsService.findForOrg(organizationId);
         TaxBreakdown breakdown = taxCalculationService.calculate(settings, quote.getCustomerState(), subtotal);
