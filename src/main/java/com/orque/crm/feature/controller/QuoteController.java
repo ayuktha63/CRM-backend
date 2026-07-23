@@ -229,6 +229,20 @@ public class QuoteController {
                 ? organizationRepository.findById(q.getOrganizationId()).orElse(null)
                 : null;
 
+        // Tax is recalculated fresh from the org's *current* Tax Settings at download
+        // time, rather than trusting whatever taxSystem/taxBreakdownJson was frozen onto
+        // this quote when it was created — so if the org later changes GST<->VAT or
+        // updates a rate, every PDF immediately reflects the current configuration
+        // instead of staying stuck with what was true at creation time.
+        OrganizationTaxSettings settings = taxSettingsService.findForOrg(q.getOrganizationId());
+        TaxBreakdown breakdown = taxCalculationService.calculate(settings, q.getCustomerState(), q.getAmount());
+        String freshTaxBreakdownJson;
+        try {
+            freshTaxBreakdownJson = objectMapper.writeValueAsString(breakdown.getTaxes());
+        } catch (Exception e) {
+            freshTaxBreakdownJson = null;
+        }
+
         Map<String, String> tokens = new HashMap<>(pdfGeneratorService.companyTokens(org));
         tokens.put("quoteNumber", q.getQuoteNumber());
         tokens.put("date",        pdfGeneratorService.formatDateTime(q.getCreatedAt()));
@@ -237,9 +251,8 @@ public class QuoteController {
         tokens.put("contact",     q.getContact() != null ? q.getContact() : "—");
         tokens.put("createdBy",   q.getCreatedBy() != null ? q.getCreatedBy() : "—");
         tokens.put("amount",      pdfGeneratorService.formatAmount(q.getAmount()));
-        tokens.put("taxRows",     pdfGeneratorService.buildTaxRows(q.getTaxBreakdownJson(), q.getAmount()));
-        tokens.put("grandTotal",  pdfGeneratorService.formatAmount(
-                q.getGrandTotal() != null ? q.getGrandTotal() : pdfGeneratorService.fallbackGrandTotal(q.getAmount())));
+        tokens.put("taxRows",     pdfGeneratorService.buildTaxRows(freshTaxBreakdownJson, q.getAmount()));
+        tokens.put("grandTotal",  pdfGeneratorService.formatAmount(breakdown.getGrandTotal()));
         tokens.put("lineItemsRows", pdfGeneratorService.buildLineItemRows(q.getLineItems(), q.getAmount()));
         tokens.put("validUntil",  pdfGeneratorService.formatDate(q.getValidUntil()));
         tokens.put("generatedAt", pdfGeneratorService.nowFormatted());
