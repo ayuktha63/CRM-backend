@@ -58,8 +58,8 @@ public class TaxCalculationService {
             return toRateSpecs(flat);
         }
 
-        boolean sameState = businessState != null && !businessState.isBlank()
-                && businessState.equalsIgnoreCase(customerState);
+        boolean sameState = businessState != null && !businessState.isBlank() && customerState != null
+                && businessState.trim().equalsIgnoreCase(customerState.trim());
 
         JsonNode node = sameState ? config.get("sameStateComponents") : config.get("differentStateComponents");
         if (node != null && !node.isNull() && node.isArray() && !node.isEmpty()) {
