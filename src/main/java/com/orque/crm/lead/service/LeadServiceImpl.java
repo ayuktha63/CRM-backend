@@ -506,12 +506,26 @@ public class LeadServiceImpl implements LeadService {
     @Override
     public java.util.List<LeadResponse> bulkImportLeads(java.util.List<CreateLeadRequest> requests) {
         java.util.List<LeadResponse> imported = new java.util.ArrayList<>();
+        int rowIndex = 0;
         for (CreateLeadRequest req : requests) {
-            if (req.getEmail() == null || req.getEmail().isBlank()) continue;
-            if (leadRepository.existsByEmail(req.getEmail())) continue;
-            try { imported.add(createLead(req)); } catch (RuntimeException ignored) { /* skip */ }
+            rowIndex++;
+            if (req.getFullName() == null || req.getFullName().isBlank()) {
+                req.setFullName("Nil");
+            }
+            if (req.getEmail() == null || req.getEmail().isBlank() || leadRepository.existsByEmail(req.getEmail())) {
+                req.setEmail(generatePlaceholderEmail(rowIndex));
+            }
+            try { imported.add(createLead(req)); } catch (RuntimeException ignored) { /* skip on unexpected failure */ }
         }
         return imported;
+    }
+
+    private String generatePlaceholderEmail(int rowIndex) {
+        String candidate;
+        do {
+            candidate = "nil+" + rowIndex + "-" + java.util.UUID.randomUUID().toString().substring(0, 8) + "@gmail.com";
+        } while (leadRepository.existsByEmail(candidate));
+        return candidate;
     }
 
     private void createLeadActivity(
