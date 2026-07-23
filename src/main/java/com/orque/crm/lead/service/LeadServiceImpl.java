@@ -523,7 +523,7 @@ public class LeadServiceImpl implements LeadService {
     private String generatePlaceholderEmail(int rowIndex) {
         String candidate;
         do {
-            candidate = "nil+" + rowIndex + "-" + java.util.UUID.randomUUID().toString().substring(0, 8) + "@gmail.com";
+            candidate = "invalid.email+" + rowIndex + "-" + java.util.UUID.randomUUID().toString().substring(0, 8) + "@invalid.email";
         } while (leadRepository.existsByEmail(candidate));
         return candidate;
     }
