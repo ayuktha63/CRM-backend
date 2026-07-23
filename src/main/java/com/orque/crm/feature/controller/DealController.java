@@ -172,6 +172,7 @@ public class DealController {
                 .dealId(id)
                 .createdBy(currentUser)
                 .status("Draft")
+                .organizationId(deal.getOrganizationId())
                 .build();
 
         return ResponseEntity.ok(quoteRepository.save(quote));
