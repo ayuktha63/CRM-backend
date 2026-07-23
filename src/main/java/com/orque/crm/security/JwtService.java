@@ -83,6 +83,17 @@ public class JwtService {
                 && !isTokenExpired(token);
     }
 
+    /** Signature + expiry check only, independent of any session-row status — used to
+     *  let a client resume a TERMINATED/EXPIRED session row without first needing a
+     *  request to pass through the normal auth filter (which blocks on that same status). */
+    public boolean isTokenSignatureValid(String token) {
+        try {
+            return !isTokenExpired(token);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     private boolean isTokenExpired(String token) {
         Date expirationDate = extractAllClaims(token).getExpiration();
 

@@ -38,4 +38,12 @@ public interface UserSessionRepository extends JpaRepository<UserSession, Long> 
     List<UserSession> findByUsernameIgnoreCaseAndStatus(String username, String status);
 
     List<UserSession> findByUsernameIn(java.util.Collection<String> usernames);
+
+    /** Weekly cleanup: TERMINATED/EXPIRED rows are historical once past the cutoff.
+     *  ACTIVE sessions are never matched by this query regardless of age. */
+    @Modifying
+    @Transactional
+    @Query("DELETE FROM UserSession s WHERE s.status IN ('TERMINATED', 'EXPIRED') " +
+            "AND COALESCE(s.logoutTime, s.lastActivity, s.createdAt) < :cutoff")
+    int deleteStaleClosedSessions(LocalDateTime cutoff);
 }
