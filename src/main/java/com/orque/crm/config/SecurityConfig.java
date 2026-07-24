@@ -15,6 +15,9 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Configuration
 @RequiredArgsConstructor
@@ -48,6 +51,17 @@ public class SecurityConfig {
                         ).permitAll()
                         .anyRequest().authenticated()
                 )
+                // Without this, Spring Security's default handling of "no/invalid credentials"
+                // falls through the anonymous-access-denied path and returns 403 — the frontend's
+                // grace-period popup (and the previous immediate-logout behavior it replaced) both
+                // key off 401, the correct REST status for "not authenticated", so a terminated or
+                // expired session's requests need to come back as 401, not 403.
+                .exceptionHandling(ex -> ex.authenticationEntryPoint((request, response, authException) -> {
+                    response.setStatus(401);
+                    response.setContentType("application/json");
+                    new ObjectMapper().writeValue(response.getWriter(),
+                            Map.of("success", false, "message", "Unauthorized"));
+                }))
                 .formLogin(form -> form.disable())
                 .httpBasic(httpBasic -> httpBasic.disable())
                 .addFilterBefore(
