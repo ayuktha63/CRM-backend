@@ -41,4 +41,6 @@ public interface CampaignService {
     CampaignMetricsResponse getCampaignMetrics(
             Long campaignId
     );
+
+    void deleteCampaign(Long campaignId);
 }
