@@ -84,6 +84,14 @@ public class CampaignController {
         );
     }
 
+    @DeleteMapping("/{campaignId}")
+    public ResponseEntity<Void> deleteCampaign(
+            @PathVariable Long campaignId
+    ) {
+        campaignService.deleteCampaign(campaignId);
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/{campaignId}/metrics")
     public ResponseEntity<CampaignMetricsResponse> getCampaignMetrics(
             @PathVariable Long campaignId
