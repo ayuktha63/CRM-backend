@@ -28,6 +28,17 @@ public class SessionController {
     private final UserRepository userRepository;
     private final JwtService jwtService;
 
+    /**
+     * Authenticated no-op the frontend polls on an interval so a terminated/expired
+     * session gets caught (and the grace-period popup shown) even on an idle screen
+     * that isn't otherwise making API calls. 401s here are handled the same as any
+     * other request by JwtAuthenticationFilter — no extra logic needed.
+     */
+    @GetMapping("/ping")
+    public ResponseEntity<Map<String, Object>> ping() {
+        return ResponseEntity.ok(Map.of("status", "ok"));
+    }
+
     @GetMapping
     public ResponseEntity<List<SessionResponse>> getAllSessions() {
         sessionRepository.expireOldSessions(LocalDateTime.now().minusHours(8));
