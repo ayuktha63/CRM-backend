@@ -96,8 +96,14 @@ public class OpacLicenseCacheService {
             ResponseEntity<Map> resp = restTemplate.getForEntity(
                     opacBaseUrl + "/api/internal/crm-user-seat/" + orgCode + "/" + username, Map.class);
             Map<String, Object> body = resp.getBody();
-            if (body == null || !Boolean.TRUE.equals(body.get("active"))) return null;
+            // "active" is false both when no seat was ever issued AND when a seat exists
+            // but is past its expiry/grace — only "expiry" being present distinguishes a
+            // real (if lapsed) seat from no seat at all. A user whose seat lapsed still
+            // needs to see THEIR OWN expired seat, not silently fall back to the tenant's
+            // (possibly still-active) master license.
+            if (body == null || !body.containsKey("expiry")) return null;
 
+            boolean active = Boolean.TRUE.equals(body.get("active"));
             boolean inGrace = Boolean.TRUE.equals(body.get("inGrace"));
             int daysRemaining = body.get("daysRemaining") instanceof Number ? ((Number) body.get("daysRemaining")).intValue() : 0;
             int graceRemaining = body.get("graceRemaining") instanceof Number ? ((Number) body.get("graceRemaining")).intValue() : 0;
@@ -107,7 +113,14 @@ public class OpacLicenseCacheService {
             List<String> features = body.get("features") instanceof List ? (List<String>) body.get("features") : new ArrayList<>();
 
             LocalDate endDate = expiry.isBlank() ? LocalDate.now() : LocalDate.parse(expiry);
-            LicenseStatus status = inGrace ? LicenseStatus.GRACE : LicenseStatus.ACTIVE;
+            LicenseStatus status;
+            if (!active) {
+                status = LicenseStatus.EXPIRED;
+            } else if (inGrace) {
+                status = LicenseStatus.GRACE;
+            } else {
+                status = LicenseStatus.ACTIVE;
+            }
             LocalDateTime activatedAt = (activatedOn.length() == 10) ? LocalDate.parse(activatedOn).atStartOfDay() : null;
 
             return LicenseStatusResponse.builder()
