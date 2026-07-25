@@ -12,6 +12,13 @@ public interface LicenseService {
     /** Get the current license status for an organization. */
     LicenseStatusResponse getStatus(String organizationId);
 
+    /**
+     * The current user's own license view: their individual seat (sub-license) if
+     * one was personally issued to them by their tenant's System Admin, falling back
+     * to the tenant-wide license only for SYSTEM_ADMIN or when no personal seat exists.
+     */
+    LicenseStatusResponse getMyStatus(String organizationId);
+
     /** Compute the effective status for the current request (used by the security filter). */
     LicenseCheckResult check(String organizationId);
 
