@@ -182,6 +182,27 @@ public class LicenseServiceImpl implements LicenseService {
     }
 
     @Override
+    public LicenseStatusResponse getMyStatus(String organizationId) {
+        // SYSTEM_ADMIN has no personal seat of their own — they see the tenant/master
+        // license the same as the existing getStatus() endpoint always has.
+        if (UserContextHelper.isSystemAdmin()) {
+            return getStatus(organizationId);
+        }
+
+        Organization org = orgRepository.findById(organizationId).orElse(null);
+        if (org != null) {
+            LicenseStatusResponse seat = opacLicenseCacheService.checkOpacUserSeat(
+                    UserContextHelper.currentUsername(), org.getOrganizationCode(), organizationId, org.getOrganizationName());
+            if (seat != null) return seat;
+        }
+
+        // No personal seat on record (shouldn't normally happen — authGuard blocks
+        // non-admins with no seat before they ever reach Settings) — fall back to the
+        // tenant-wide view rather than showing nothing.
+        return getStatus(organizationId);
+    }
+
+    @Override
     public LicenseCheckResult check(String organizationId) {
         if (organizationId == null) {
             return new LicenseCheckResult(true, false, 0, "No org — system user", 0);

@@ -48,7 +48,7 @@ public class LicenseController {
                     .organizationName("SYSTEM_ADMIN — no org")
                     .build());
         }
-        return ResponseEntity.ok(licenseService.getStatus(orgId));
+        return ResponseEntity.ok(licenseService.getMyStatus(orgId));
     }
 
     /** SYSTEM_ADMIN: generate a new encrypted license key string for testing / distribution. */
