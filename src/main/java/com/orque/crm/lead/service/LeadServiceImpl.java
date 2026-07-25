@@ -55,6 +55,15 @@ public class LeadServiceImpl implements LeadService {
             throw new RuntimeException("Lead with this email already exists");
         }
 
+        return saveLead(request);
+    }
+
+    /**
+     * Builds and saves a lead without the duplicate-email check.
+     * Used by bulk import, where duplicate emails are allowed; regular
+     * single-lead creation goes through {@link #createLead} instead.
+     */
+    private LeadResponse saveLead(CreateLeadRequest request) {
         Lead lead = Lead.builder()
                 .contactId(null)
                 .fullName(request.getFullName())
@@ -506,12 +515,28 @@ public class LeadServiceImpl implements LeadService {
     @Override
     public java.util.List<LeadResponse> bulkImportLeads(java.util.List<CreateLeadRequest> requests) {
         java.util.List<LeadResponse> imported = new java.util.ArrayList<>();
+        int rowIndex = 0;
         for (CreateLeadRequest req : requests) {
-            if (req.getEmail() == null || req.getEmail().isBlank()) continue;
-            if (leadRepository.existsByEmail(req.getEmail())) continue;
-            try { imported.add(createLead(req)); } catch (RuntimeException ignored) { /* skip */ }
+            rowIndex++;
+            if (req.getFullName() == null || req.getFullName().isBlank()) {
+                req.setFullName("Nil");
+            }
+            if (req.getEmail() == null || req.getEmail().isBlank()) {
+                req.setEmail(generatePlaceholderEmail(rowIndex));
+            }
+            try { imported.add(saveLead(req)); } catch (RuntimeException ignored) { /* skip on unexpected failure */ }
         }
         return imported;
+    }
+
+    private String generatePlaceholderEmail(int rowIndex) {
+        String candidate = "invalid.email" + rowIndex + "@invalid.email";
+        int attempt = rowIndex;
+        while (leadRepository.existsByEmail(candidate)) {
+            attempt++;
+            candidate = "invalid.email" + attempt + "@invalid.email";
+        }
+        return candidate;
     }
 
     private void createLeadActivity(

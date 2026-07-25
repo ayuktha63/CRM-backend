@@ -12,6 +12,7 @@ import com.orque.crm.audit.service.AuditLogService;
 import com.orque.crm.common.UserContextHelper;
 import com.orque.crm.enums.AuditAction;
 import com.orque.crm.enums.AuditModule;
+import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -117,6 +118,45 @@ public class CampaignServiceImpl implements CampaignService {
 
         Campaign saved = campaignRepository.save(campaign);
         return mapCampaignToResponse(saved);
+    }
+
+    @Override
+    @Transactional
+    public void deleteCampaign(Long campaignId) {
+        Campaign campaign = campaignRepository.findById(campaignId)
+                .orElseThrow(() -> new RuntimeException("Campaign not found"));
+
+        String myOrg = UserContextHelper.currentOrganizationId();
+        if (myOrg != null && campaign.getOrganizationId() != null && !myOrg.equals(campaign.getOrganizationId())) {
+            throw new RuntimeException("Access denied.");
+        }
+
+        List<CampaignRecipient> recipients = campaignRecipientRepository.findByCampaignId(campaignId);
+        if (!recipients.isEmpty()) {
+            campaignRecipientRepository.deleteAll(recipients);
+        }
+
+        List<CampaignEmailHistory> histories = campaignEmailHistoryRepository.findByCampaignId(campaignId);
+        if (!histories.isEmpty()) {
+            campaignEmailHistoryRepository.deleteAll(histories);
+        }
+
+        campaignMetricsRepository.findByCampaignId(campaignId)
+                .ifPresent(campaignMetricsRepository::delete);
+
+        campaignRepository.delete(campaign);
+
+        auditLogService.createAudit(
+                AuditAction.CAMPAIGN_DELETED,
+                AuditModule.CAMPAIGN,
+                "Campaign",
+                campaignId,
+                campaign.getCampaignName(),
+                null,
+                "Campaign deleted: " + campaign.getCampaignName(),
+                "SYSTEM",
+                null
+        );
     }
 
     @Override

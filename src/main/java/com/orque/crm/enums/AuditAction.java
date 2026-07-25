@@ -29,6 +29,7 @@ public enum AuditAction {
     // Campaigns
     CAMPAIGN_CREATED,
     CAMPAIGN_LAUNCHED,
+    CAMPAIGN_DELETED,
 
     // CSV
     CSV_IMPORTED,

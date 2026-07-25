@@ -25,6 +25,13 @@ public class GlobalExceptionHandler {
         return errorResponse(HttpStatus.UNAUTHORIZED, ex.getMessage());
     }
 
+    /** Google Workspace not connected/revoked for this user — 409 so the frontend can prompt reconnect
+     *  distinctly from a real CRM auth failure. */
+    @ExceptionHandler(com.orque.crm.google.token.GoogleNotConnectedException.class)
+    public ResponseEntity<Map<String, Object>> handleGoogleNotConnected(com.orque.crm.google.token.GoogleNotConnectedException ex) {
+        return errorResponse(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
     /**
      * CRM delegates credential validation to OPAC. OPAC returns a structured error
      * which AuthServiceImpl throws as RuntimeException with the OPAC message.

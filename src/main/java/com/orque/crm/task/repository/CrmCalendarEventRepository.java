@@ -12,4 +12,5 @@ public interface CrmCalendarEventRepository extends JpaRepository<CrmCalendarEve
     List<CrmCalendarEvent> findByOrganizationIdAndCreatedByIgnoreCase(String organizationId, String createdBy);
     List<CrmCalendarEvent> findByOrganizationId(String organizationId);
     Optional<CrmCalendarEvent> findBySyncId(String syncId);
+    List<CrmCalendarEvent> findByCreatedByIgnoreCaseAndSyncSourceIsNull(String createdBy);
 }

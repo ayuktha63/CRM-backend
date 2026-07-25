@@ -186,6 +186,20 @@ public class InvoiceController {
                 ? organizationRepository.findById(inv.getOrganizationId()).orElse(null)
                 : null;
 
+        // Tax is recalculated fresh from the org's *current* Tax Settings at download
+        // time, rather than trusting whatever taxSystem/taxBreakdownJson was frozen onto
+        // this invoice when it was created — so if the org later changes GST<->VAT or
+        // updates a rate, every PDF immediately reflects the current configuration
+        // instead of staying stuck with what was true at creation time.
+        OrganizationTaxSettings settings = taxSettingsService.findForOrg(inv.getOrganizationId());
+        TaxBreakdown breakdown = taxCalculationService.calculate(settings, inv.getCustomerState(), inv.getAmount());
+        String freshTaxBreakdownJson;
+        try {
+            freshTaxBreakdownJson = objectMapper.writeValueAsString(breakdown.getTaxes());
+        } catch (Exception e) {
+            freshTaxBreakdownJson = null;
+        }
+
         Map<String, String> tokens = new HashMap<>(pdfGeneratorService.companyTokens(org));
         tokens.put("invoiceNumber", inv.getInvoiceNumber());
         tokens.put("date",          pdfGeneratorService.formatDateTime(inv.getCreatedAt()));
@@ -197,9 +211,8 @@ public class InvoiceController {
         tokens.put("createdBy",     inv.getCreatedBy() != null ? inv.getCreatedBy() : "—");
         tokens.put("quoteRef",      quoteRef);
         tokens.put("amount",        pdfGeneratorService.formatAmount(inv.getAmount()));
-        tokens.put("taxRows",       pdfGeneratorService.buildTaxRows(inv.getTaxBreakdownJson(), inv.getAmount()));
-        tokens.put("grandTotal",    pdfGeneratorService.formatAmount(
-                inv.getGrandTotal() != null ? inv.getGrandTotal() : pdfGeneratorService.fallbackGrandTotal(inv.getAmount())));
+        tokens.put("taxRows",       pdfGeneratorService.buildTaxRows(freshTaxBreakdownJson, inv.getAmount()));
+        tokens.put("grandTotal",    pdfGeneratorService.formatAmount(breakdown.getGrandTotal()));
         tokens.put("lineItemsRows", pdfGeneratorService.buildLineItemRows(inv.getLineItems(), inv.getAmount()));
         tokens.put("generatedAt",   pdfGeneratorService.nowFormatted());
 

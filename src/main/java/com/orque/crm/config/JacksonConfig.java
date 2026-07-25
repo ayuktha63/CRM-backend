@@ -26,9 +26,11 @@ public class JacksonConfig {
 
     private static final DateTimeFormatter DATE_ONLY = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final DateTimeFormatter DATETIME_FULL = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
+    // Accepts "yyyy-MM-ddTHH:mm" (what <input type="datetime-local"> sends when seconds are :00,
+    // since browsers omit trailing zero components), with optional seconds and millis.
     private static final DateTimeFormatter DATETIME_MILLIS =
-            new DateTimeFormatterBuilder().appendPattern("yyyy-MM-dd'T'HH:mm:ss")
-                    .optionalStart().appendPattern(".SSS").optionalEnd()
+            new DateTimeFormatterBuilder().appendPattern("yyyy-MM-dd'T'HH:mm")
+                    .optionalStart().appendPattern(":ss").optionalStart().appendPattern(".SSS").optionalEnd().optionalEnd()
                     .toFormatter();
 
     @Bean
