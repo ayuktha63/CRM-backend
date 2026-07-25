@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -78,6 +79,53 @@ public class OpacLicenseCacheService {
                     .build();
         } catch (Exception e) {
             log.warn("Could not reach OPAC for license check (org={}): {}", orgCode, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Per-user seat (sub-license) a tenant's System Admin issued to this specific
+     * person — distinct from checkOpacMasterLicense above, which is the tenant-wide
+     * license every user in the org shares. Individual users should see their own
+     * seat's expiry/features here, not the org's master license.
+     */
+    @Cacheable(value = RedisCacheConfig.CACHE_OPAC_LICENSE, key = "'seat:' + #orgCode + ':' + #username", unless = "#result == null")
+    @SuppressWarnings("unchecked")
+    public LicenseStatusResponse checkOpacUserSeat(String username, String orgCode, String organizationId, String orgName) {
+        try {
+            ResponseEntity<Map> resp = restTemplate.getForEntity(
+                    opacBaseUrl + "/api/internal/crm-user-seat/" + orgCode + "/" + username, Map.class);
+            Map<String, Object> body = resp.getBody();
+            if (body == null || !Boolean.TRUE.equals(body.get("active"))) return null;
+
+            boolean inGrace = Boolean.TRUE.equals(body.get("inGrace"));
+            int daysRemaining = body.get("daysRemaining") instanceof Number ? ((Number) body.get("daysRemaining")).intValue() : 0;
+            int graceRemaining = body.get("graceRemaining") instanceof Number ? ((Number) body.get("graceRemaining")).intValue() : 0;
+            int gracePeriod = body.get("gracePeriod") instanceof Number ? ((Number) body.get("gracePeriod")).intValue() : 30;
+            String expiry = body.getOrDefault("expiry", "").toString();
+            String activatedOn = body.getOrDefault("activatedOn", "").toString();
+            List<String> features = body.get("features") instanceof List ? (List<String>) body.get("features") : new ArrayList<>();
+
+            LocalDate endDate = expiry.isBlank() ? LocalDate.now() : LocalDate.parse(expiry);
+            LicenseStatus status = inGrace ? LicenseStatus.GRACE : LicenseStatus.ACTIVE;
+            LocalDateTime activatedAt = (activatedOn.length() == 10) ? LocalDate.parse(activatedOn).atStartOfDay() : null;
+
+            return LicenseStatusResponse.builder()
+                    .organizationId(organizationId)
+                    .organizationName(orgName)
+                    .licenseName("Individual Seat License")
+                    .orgCode(orgCode)
+                    .endDate(endDate)
+                    .gracePeriodDays(gracePeriod)
+                    .status(status)
+                    .daysRemaining(daysRemaining)
+                    .inGracePeriod(inGrace)
+                    .graceRemaining(graceRemaining)
+                    .activatedAt(activatedAt)
+                    .features(features)
+                    .build();
+        } catch (Exception e) {
+            log.warn("Could not reach OPAC for user seat check (org={}, user={}): {}", orgCode, username, e.getMessage());
             return null;
         }
     }
