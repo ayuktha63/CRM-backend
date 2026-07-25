@@ -139,6 +139,13 @@
             <version>v3-rev20260517-2.0.0</version>
         </dependency>
 
+        <!-- Google Tasks API Java Client -->
+        <dependency>
+            <groupId>com.google.apis</groupId>
+            <artifactId>google-api-services-tasks</artifactId>
+            <version>v1-rev20250518-2.0.0</version>
+        </dependency>
+
         <!-- JavaMail for creating MIME email messages -->
         <dependency>
             <groupId>com.sun.mail</groupId>

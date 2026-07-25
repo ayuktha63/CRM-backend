@@ -2,7 +2,6 @@ package com.orque.crm.task.controller;
 
 import com.orque.crm.task.entity.CrmCalendarEvent;
 import com.orque.crm.task.service.CrmCalendarEventService;
-import com.orque.crm.task.service.GoogleCalendarSyncService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -18,7 +17,6 @@ import java.util.List;
 public class CrmCalendarEventController {
 
     private final CrmCalendarEventService service;
-    private final GoogleCalendarSyncService googleCalendarSyncService;
 
     @GetMapping
     public ResponseEntity<List<CrmCalendarEvent>> getEvents() {
@@ -48,6 +46,28 @@ public class CrmCalendarEventController {
         return ResponseEntity.noContent().build();
     }
 
+    @GetMapping("/unsynced-count")
+    public ResponseEntity<java.util.Map<String, Long>> unsyncedCount() {
+        String username = "system";
+        try {
+            username = com.orque.crm.common.UserContextHelper.currentUsername();
+        } catch (Exception e) {
+            // fallback
+        }
+        return ResponseEntity.ok(java.util.Map.of("count", service.countUnsynced(username)));
+    }
+
+    @PostMapping("/sync")
+    public ResponseEntity<java.util.Map<String, Integer>> sync() {
+        String username = "system";
+        try {
+            username = com.orque.crm.common.UserContextHelper.currentUsername();
+        } catch (Exception e) {
+            // fallback
+        }
+        return ResponseEntity.ok(java.util.Map.of("synced", service.syncToGoogle(username)));
+    }
+
     @GetMapping("/{id}/export-ics")
     public ResponseEntity<String> exportIcs(@PathVariable Long id) {
         String ics = service.exportEventToIcs(id);
@@ -66,22 +86,6 @@ public class CrmCalendarEventController {
             // fallback
         }
         return ResponseEntity.ok(service.importEventFromIcs(icsContent, username));
-    }
-
-    @PostMapping("/sync/google")
-    public ResponseEntity<java.util.Map<String, Object>> syncGoogle() {
-        String username = com.orque.crm.common.UserContextHelper.currentUsername();
-        return ResponseEntity.ok(googleCalendarSyncService.syncNow(username));
-    }
-
-    @PostMapping("/sync/outlook")
-    public ResponseEntity<java.util.Map<String, Object>> syncOutlook() {
-        java.util.Map<String, Object> res = new java.util.HashMap<>();
-        res.put("success", true);
-        res.put("provider", "Outlook");
-        res.put("syncedCount", 2);
-        res.put("lastSynced", java.time.LocalDateTime.now().toString());
-        return ResponseEntity.ok(res);
     }
 
     @GetMapping("/slots")
