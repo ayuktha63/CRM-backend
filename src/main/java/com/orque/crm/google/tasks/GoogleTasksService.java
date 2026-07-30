@@ -97,7 +97,10 @@ public class GoogleTasksService {
         GoogleWorkspaceCredential credential = requireTasksConnected(username);
         try {
             Tasks client = buildClient(credential);
-            var response = client.tasks().list(taskListId).setShowCompleted(true).execute();
+            // Google hides a task from list() as soon as it's completed — showCompleted alone
+            // doesn't bring it back, showHidden is also required, or completed tasks vanish
+            // from CRM entirely instead of showing under Completed.
+            var response = client.tasks().list(taskListId).setShowCompleted(true).setShowHidden(true).execute();
             tokenManager.recordApiSuccess(username);
             if (response.getItems() == null) return java.util.List.of();
             return response.getItems().stream().map(t -> toTaskDto(taskListId, t)).toList();
