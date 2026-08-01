@@ -21,6 +21,10 @@ public class CrmCustomFieldData {
     @Column(nullable = false)
     private String moduleName;
 
+    /** Tenant this value belongs to. Nullable only for rows that predate this column. */
+    @Column(length = 36)
+    private String organizationId;
+
     @Column(nullable = false)
     private Long recordId;
 

@@ -18,6 +18,10 @@ public class CrmMetadataLayout {
     @Column(nullable = false)
     private String moduleName;
 
+    /** Tenant this layout belongs to. Nullable only for rows that predate this column. */
+    @Column(length = 36)
+    private String organizationId;
+
     @Column(nullable = false)
     private String name;
 

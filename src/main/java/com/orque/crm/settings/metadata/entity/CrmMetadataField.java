@@ -18,6 +18,13 @@ public class CrmMetadataField {
     @Column(nullable = false)
     private String moduleName;
 
+    /** Tenant this field belongs to. Nullable only for rows that predate this column
+     *  (legacy data) — new fields always get the creating user's organizationId. */
+    @Column(length = 36)
+    private String organizationId;
+
+    private String createdBy;
+
     @Column(nullable = false)
     private String name;
 
