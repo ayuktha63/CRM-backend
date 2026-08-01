@@ -8,4 +8,5 @@ import java.util.List;
 @Repository
 public interface CrmMetadataFieldRepository extends JpaRepository<CrmMetadataField, Long> {
     List<CrmMetadataField> findByModuleNameIgnoreCase(String moduleName);
+    List<CrmMetadataField> findByModuleNameIgnoreCaseAndOrganizationId(String moduleName, String organizationId);
 }
