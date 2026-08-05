@@ -1,5 +1,6 @@
 package com.orque.crm.feature.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 import java.math.BigDecimal;
@@ -12,6 +13,9 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+// Ignore unknown JSON fields so import payloads with extra columns don't fail
+// deserialization (mirrors CreateLeadRequest).
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class Product {
 
     @Id

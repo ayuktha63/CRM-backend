@@ -3,6 +3,7 @@ package com.orque.crm.feature.controller;
 import com.orque.crm.common.UserContextHelper;
 import com.orque.crm.feature.entity.Product;
 import com.orque.crm.feature.repository.ProductRepository;
+import com.orque.crm.feature.service.ProductService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -16,6 +17,7 @@ import java.util.Map;
 public class ProductController {
 
     private final ProductRepository productRepository;
+    private final ProductService productService;
 
     @GetMapping
     public ResponseEntity<List<Product>> getAll() {
@@ -51,6 +53,11 @@ public class ProductController {
         }
         product.setOrganizationId(UserContextHelper.currentOrganizationId());
         return ResponseEntity.ok(productRepository.save(product));
+    }
+
+    @PostMapping("/bulk-import")
+    public List<Product> bulkImportProducts(@RequestBody List<Product> requests) {
+        return productService.bulkImportProducts(requests);
     }
 
     @PutMapping("/{id}")
